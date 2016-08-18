@@ -133,7 +133,7 @@ def parse_config(conf):
     return {
             REDDIT_USERNAME: config.get('autobot', 'user'),
             REDDIT_PASSWORD: config.get('autobot', 'password'),
-            CLIENT_ID: config.get('autobot', 'CLIENT_ID'),
+            CLIENT_ID: config.get('autobot', 'client_id'),
             CLIENT_SECRET: config.get('autobot', 'client_secret'),
             POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
             DATAFILE: config.get('autobot', 'datafile'),
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     logging.info("Time between allowed top-level posts: {0} seconds".format(configuration[POST_TIMELIMIT]))
 
     reddit = praw.Reddit(user_agent='r/nosleep Autobot v 1.0 (by /u/SofaAssassin)',
-                CLIENT_ID=configuration[CLIENT_ID],
+                client_id=configuration[CLIENT_ID],
                 client_secret=configuration[CLIENT_SECRET],
                 username=configuration[REDDIT_USERNAME],
                 password=configuration[REDDIT_PASSWORD])
