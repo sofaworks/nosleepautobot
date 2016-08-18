@@ -187,6 +187,8 @@ if __name__ == '__main__':
     walrus = WalrusLite(configuration[DATAFILE])
     subreddit = reddit.subreddit(configuration[SUBREDDIT])
 
+    logging.info("Datafile used by walrus: {0}".format(configuration[DATAFILE]))
+
     if not subreddit.user_is_moderator:
         # Bail early because bot doesn't have moderator privilege
         raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], configuration[SUBREDDIT]))
@@ -202,7 +204,7 @@ if __name__ == '__main__':
         now = int(time.time())
         logging.info("Reviewing post '{0}' submitted by '{1}' on {2}".format(submission.id, submission.author.name, submission.created_utc))
 
-        if reject_submission_by_timelimit(submission, now, walrus):
+        if reject_submission_by_timelimit(submission, now, configuration[POST_TIMELIMIT], walrus):
             # make a distinguished comment and remove post
             logging.info("Rejecting submission {0} because of time limit".format(submission.id))
             valid_date = (submission.created_utc + configuration[POST_TIMELIMIT]) - now
