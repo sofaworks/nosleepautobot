@@ -148,7 +148,7 @@ def get_environment_configuration():
             SUBREDDIT: os.getenv('AUTOBOT_SUBREDDIT'),
             CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
             CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
-            DATAFILE: os.getenv('AUTOBOT_DATEFILE'),
+            DATAFILE: os.getenv('AUTOBOT_DATAFILE'),
             POST_TIMELIMIT: os.getenv('AUTOBOT_POST_TIMELIMIT')
     }
 
