@@ -9,6 +9,7 @@ import argparse
 import signal
 import time
 import sys
+import os
 import re
 
 import praw
@@ -17,6 +18,13 @@ from walrus.tusks.rlite import WalrusLite
 
 SubmissionMeta = namedtuple('SubmissionMeta', ['author', 'last_submission_time', 'last_submission_id'])
 
+REDDIT_USERNAME = 'reddit_username'
+REDDIT_PASSWORD = 'reddit_password'
+CLIENT_ID = 'client_id'
+CLIENT_SECRET = 'client_secret'
+POST_TIMELIMIT = 'seconds_between_posts'
+DATAFILE = 'datafile'
+SUBREDDIT = 'subreddit'
 
 POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
                       'in order to give all submitters here an equal shot at the front page.\n\n'
@@ -45,11 +53,13 @@ SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep
 
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
-    parser.add_argument('-c', '--conf', required=True, type=str)
+    parser.add_argument('-c', '--conf', required=False, type=str)
     return parser
 
 
-def reject_submission_by_timelimit(submission, time_now, db=None):
+def reject_submission_by_timelimit(submission, time_now, time_limit_seconds, db=None):
+    """Determine if a submission should be removed based on a time-limit
+    for submissions for a subreddit."""
     # look up if this user has a post in storage
     if db:
         value = db.hgetall(submission.author.name)
@@ -59,25 +69,29 @@ def reject_submission_by_timelimit(submission, time_now, db=None):
             h = db.Hash(submission.author.name)
             h.update(last_submission_id=submission.id, last_submission_time=int(submission.created_utc))
         else: 
-            next_post_time = int(value['last_submission_time']) + 86400
+            next_post_time = int(value['last_submission_time']) + time_limit_seconds
             if (next_post_time > time_now) and (value['last_submission_id'] != submission.id):
                 logging.info("Rejecting subission due to time limit")
                 return True
     else:
-        # TODO do the manual check of the user submission and
+        # TODO do the manual check of the user submission and compare it to
+        # submissions from the last `time_limit_seconds` prior to that submission
         raise NotImplementedError("Use of `reject_submission_by_timelimit` without a database is currently unsupported")
 
     return False
 
 def categorize_tags(title):
-    # Parses tags out of the post title
-    # Valid submission tags are things between [], {}, and ()
-    # Valid tag values are:
-    # - a single number (shorthand for part #)
-    # - Pt/Pt./Part + number (integral or textual)
-    # - Vol/Vol./Volume  + number (integral or textual)
-    # - Update
-    # - Final
+    """Parses tags out of the post title
+    Valid submission tags are things between [], {}, and ()
+    
+    Valid tag values are:
+    
+    * a single number (shorthand for part #)
+    * Pt/Pt./Part + number (integral or textual)
+    * Vol/Vol./Volume  + number (integral or textual)
+    * Update
+    * Final
+    """
 
     tag_cats = { 'valid_tags': [], 'invalid_tags': [] }
 
@@ -98,59 +112,87 @@ def categorize_tags(title):
 
 
 def englishify_time(td):
+    '''Converts a timedelta object into a string describing how long it is in hours/minutes/seconds'''
     hours, remainder = divmod(td.total_seconds(), 3600)
     minutes, seconds = divmod(remainder, 60)
+
     return '{0} hours, {1} minutes, {2} seconds'.format(int(hours), int(minutes), int(seconds))
+
+def get_bot_defaults():
+    """Returns some defaults for running the bot."""
+    return {
+            POST_TIMELIMIT: 86400,
+            DATAFILE: ':memory:'
+        }
 
 def parse_config(conf):
     '''conf is a file or file-like pointer'''
-    config = ConfigParser.SafeConfigParser()
+    config = ConfigParser.SafeConfigParser(allow_no_value=True)
     config.readfp(conf)
 
     return {
-            'reddit_username': config.get('autobot', 'user'),
-            'reddit_password': config.get('autobot', 'password'),
-            'client_id': config.get('autobot', 'client_id'),
-            'client_secret': config.get('autobot', 'client_secret'),
-            'seconds_between_posts': config.getint('autobot', 'seconds_between_allowed_posts'),
-            'datafile': config.get('autobot', 'datafile'),
-            'subreddit': config.get('autobot', 'subreddit')
+            REDDIT_USERNAME: config.get('autobot', 'user'),
+            REDDIT_PASSWORD: config.get('autobot', 'password'),
+            CLIENT_ID: config.get('autobot', 'CLIENT_ID'),
+            CLIENT_SECRET: config.get('autobot', 'client_secret'),
+            POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
+            DATAFILE: config.get('autobot', 'datafile'),
+            SUBREDDIT: config.get('autobot', 'subreddit')
         }
 
+def get_environment_configuration():
+    """Gets configurations specified in environment variables"""
+    override = {
+            REDDIT_USERNAME: os.getenv('AUTOBOT_REDDIT_USERNAME'),
+            REDDIT_PASSWORD: os.getenv('AUTOBOT_REDDIT_PASSWORD'),
+            SUBREDDIT: os.getenv('AUTOBOT_SUBREDDIT'),
+            CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
+            CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
+            DATAFILE: os.getenv('AUTOBOT_DATEFILE'),
+            POST_TIMELIMIT: os.getenv('AUTOBOT_POST_TIMELIMIT')
+    }
+
+    # remove all the 'None' valued things
+    return {k:v for k,v in override.items() if v is not None}
 
 if __name__ == '__main__':
 
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-    #logger = logging.getLogger('autobot')
-    #logger.setLevel(logging.DEBUG)
-    #console = logging.StreamHandler(sys.stdout)
-
-    #formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-    #console.setLevel(logging.INFO)
-    #console.setFormatter(formatter)
-    #logger.addHandler(console)
 
     parser = create_argparser()
     args = parser.parse_args()
 
-    with open(args.conf) as cfile:
-        configuration = parse_config(cfile)
+    configuration = get_bot_defaults()
 
+    if args.conf:
+        with open(args.conf) as cfile:
+            configuration = parse_config(cfile)
+
+    # Environment variables override configuration file settings
+    env_config = get_environment_configuration()
+    configuration.update(env_config)
+    
     logging.info("autobot rolling out with settings...")
-    logging.info("Subreddit: {0}".format(configuration['subreddit']))
-    logging.info("Reddit username: {0}".format(configuration['reddit_username']))
-    logging.info("Redis datafile: {0}".format(configuration['datafile']))
-    logging.info("Time between allowed top-level posts: {0} seconds".format(configuration['seconds_between_posts']))
+    logging.info("Subreddit: {0}".format(configuration[SUBREDDIT]))
+    logging.info("Reddit username: {0}".format(configuration[REDDIT_USERNAME]))
+    logging.info("Redis datafile: {0}".format(configuration[DATAFILE]))
+    logging.info("Time between allowed top-level posts: {0} seconds".format(configuration[POST_TIMELIMIT]))
 
     reddit = praw.Reddit(user_agent='r/nosleep Autobot v 1.0 (by /u/SofaAssassin)',
-                client_id=configuration['client_id'],
-                client_secret=configuration['client_secret'],
-                username=configuration['reddit_username'],
-                password=configuration['reddit_password'])
+                CLIENT_ID=configuration[CLIENT_ID],
+                client_secret=configuration[CLIENT_SECRET],
+                username=configuration[REDDIT_USERNAME],
+                password=configuration[REDDIT_PASSWORD])
 
-    walrus = WalrusLite(configuration['datafile'])
-    subreddit = reddit.subreddit(configuration['subreddit'])
+    walrus = WalrusLite(configuration[DATAFILE])
+    subreddit = reddit.subreddit(configuration[SUBREDDIT])
+
+    if not subreddit.user_is_moderator:
+        # Bail early because bot doesn't have moderator privilege
+        raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], configuration[SUBREDDIT]))
+
     mod = SubredditModeration(subreddit)
+
     for submission in subreddit.stream.submissions():
         # for each submission, look up if the user information was already cached.
         # If it hasn't been, add it.
@@ -162,11 +204,11 @@ if __name__ == '__main__':
 
         if reject_submission_by_timelimit(submission, now, walrus):
             # make a distinguished comment and remove post
-            logging.info("Rejecting submission because of time limit")
-            valid_date = (submission.created_utc + configuration['seconds_between_posts']) - now
+            logging.info("Rejecting submission {0} because of time limit".format(submission.id))
+            valid_date = (submission.created_utc + configuration[POST_TIMELIMIT]) - now
             time_until_can_post = datetime.timedelta(seconds=valid_date)
 
-            # convert timestamp back to 
+            # convert timestamp back to English text to be more helpful
             fmt_msg = POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_until_can_post))
             mod.distinguish(submission.reply(fmt_msg))
             mod.remove(submission)

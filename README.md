@@ -1,5 +1,7 @@
 # nosleep autobot
 
+[![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master)
+
 A submission moderator bot for [`/r/nosleep`](https://www.reddit.com/r/nosleep), aiming to replace the bot `NoSleepAutoMod` as it recently stopped functioning and its source code wasn't available for anyone to rehost.
 
 ## Implemented Functionality
