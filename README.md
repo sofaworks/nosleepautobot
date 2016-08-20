@@ -1,6 +1,4 @@
-# nosleep autobot
-
-[![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master)
+# nosleep autobot [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master)
 
 A submission moderator bot for [`/r/nosleep`](https://www.reddit.com/r/nosleep), aiming to replace the bot `NoSleepAutoMod` as it recently stopped functioning and its source code wasn't available for anyone to rehost.
 
@@ -41,5 +39,3 @@ Better methods of running this will be provided, but for the time being, in orde
 `autobot` is written in Python 2.7.
 
 It uses the pre-release version of [`praw4`](https://github.com/praw-dev/praw/tree/praw4/praw) for all Reddit interaction.
-
-`rlite` is used as an in-memory caching-store, backed by a persistent on-disk file. This is currently only used for enforcing the 24-hour time limit.
