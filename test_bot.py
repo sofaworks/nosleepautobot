@@ -24,8 +24,8 @@ class TestBotMethods(unittest.TestCase):
     def test_englishify_time(self):
         import datetime
         td = datetime.timedelta(days=1, hours=3, minutes=30, seconds=30)
-        
-        time_string = bot.englishify_time(td)
+
+        time_string = bot.englishify_time(td.total_seconds())
 
         self.assertEqual(time_string, "27 hours, 30 minutes, 30 seconds")
 
