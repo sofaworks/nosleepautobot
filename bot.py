@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 from string import Template
-from collections import namedtuple
 import ConfigParser
-import logging
+import urlparse
 import datetime
 import argparse
+import logging
 import signal
 import time
 import sys
@@ -13,18 +13,44 @@ import os
 import re
 
 import praw
+from walrus import Walrus, Model, TextField, IntegerField, BooleanField
 from praw.models.reddit.subreddit import SubredditModeration
-from walrus.tusks.rlite import WalrusLite
 
-SubmissionMeta = namedtuple('SubmissionMeta', ['author', 'last_submission_time', 'last_submission_id'])
 
+USER_AGENT = 'user_agent'
 REDDIT_USERNAME = 'reddit_username'
 REDDIT_PASSWORD = 'reddit_password'
 CLIENT_ID = 'client_id'
 CLIENT_SECRET = 'client_secret'
 POST_TIMELIMIT = 'seconds_between_posts'
-DATAFILE = 'datafile'
 SUBREDDIT = 'subreddit'
+REDIS_BACKEND = 'redis_backend'
+REDIS_URL = 'redis_url'
+REDIS_PORT = 'redis_port'
+REDIS_PASSWORD = 'redis_password'
+
+
+class AutobotBaseModel(Model):
+    database = None
+    namespace = 'autobot'
+
+    @classmethod
+    def set_database(cls, db):
+        cls.database = db
+
+
+class AutobotSubmission(AutobotBaseModel):
+    submission_id = TextField(primary_key=True)
+    author = TextField(index=True)
+    submission_time = IntegerField()
+    is_series = BooleanField()
+    sent_series_pm = BooleanField()
+    deleted = BooleanField()
+
+    @classmethod
+    def set_ttl(cls, submission, ttl=86400):
+        submission.to_hash().expire(ttl=ttl)
+
 
 POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
                       'in order to give all submitters here an equal shot at the front page.\n\n'
@@ -35,6 +61,7 @@ POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per
                       '[message the moderators](http://www.reddit.com/message/compose?to=%2Fr%2Fnosleep).'
                       )
 
+
 DISALLOWED_TAGS_MESSAGE = ('Hi there! Your post has been removed from /r/nosleep '
                             'as we have strict rules about tags in story titles:\n\n'
                             '**Tags (example: [True], [real experience]) are not allowed.** '
@@ -43,9 +70,10 @@ DISALLOWED_TAGS_MESSAGE = ('Hi there! Your post has been removed from /r/nosleep
                             '**Example**: (part 1) or [Pt2].\n\n'
                             'You will need to delete your story and repost with a corrected title.')
 
+
 SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep series! '
                   'Awesome! Please be sure to double-check that [your post](${post_url}) '
-                  'has "series" flair and please remember to include [a link](${post_url}) '
+                  'has "series" flair and please remember to include a link '
                   'to the previous part at the top of your story.\n\n'
                   "Don't know how to add flair? Visit your story's comment page "
                   'and look underneath the post itself. Click on the **flair** button '
@@ -56,36 +84,12 @@ def create_argparser():
     parser.add_argument('-c', '--conf', required=False, type=str)
     return parser
 
-
-def reject_submission_by_timelimit(submission, time_now, time_limit_seconds, db=None):
-    """Determine if a submission should be removed based on a time-limit
-    for submissions for a subreddit."""
-    # look up if this user has a post in storage
-    if db:
-        value = db.hgetall(submission.author.name)
-        if not value:
-            logging.info("User '{0}' seen for first time apparently. Adding...".format(submission.author.name))
-            # add this to the cache
-            h = db.Hash(submission.author.name)
-            h.update(last_submission_id=submission.id, last_submission_time=int(submission.created_utc))
-        else: 
-            next_post_time = int(value['last_submission_time']) + time_limit_seconds
-            if (next_post_time > time_now) and (value['last_submission_id'] != submission.id):
-                logging.info("Rejecting subission due to time limit")
-                return True
-    else:
-        # TODO do the manual check of the user submission and compare it to
-        # submissions from the last `time_limit_seconds` prior to that submission
-        raise NotImplementedError("Use of `reject_submission_by_timelimit` without a database is currently unsupported")
-
-    return False
-
 def categorize_tags(title):
     """Parses tags out of the post title
     Valid submission tags are things between [], {}, and ()
-    
+
     Valid tag values are:
-    
+
     * a single number (shorthand for part #)
     * Pt/Pt./Part + number (integral or textual)
     * Vol/Vol./Volume  + number (integral or textual)
@@ -93,7 +97,7 @@ def categorize_tags(title):
     * Final
     """
 
-    tag_cats = { 'valid_tags': [], 'invalid_tags': [] }
+    tag_cats = {'valid_tags': [], 'invalid_tags': []}
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
     allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|final|update)$")
@@ -111,19 +115,21 @@ def categorize_tags(title):
     return tag_cats
 
 
-def englishify_time(td):
-    '''Converts a timedelta object into a string describing how long it is in hours/minutes/seconds'''
-    hours, remainder = divmod(td.total_seconds(), 3600)
+def englishify_time(seconds):
+    '''Converts seconds  into a string describing how long it is in hours/minutes/seconds'''
+    hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
 
     return '{0} hours, {1} minutes, {2} seconds'.format(int(hours), int(minutes), int(seconds))
 
 def get_bot_defaults():
     """Returns some defaults for running the bot."""
-    return {
-            POST_TIMELIMIT: 86400,
-            DATAFILE: ':memory:'
-        }
+    return {POST_TIMELIMIT: 86400,
+            REDIS_BACKEND: 'rlite',
+            REDIS_URL: ':memory:',
+            REDIS_PORT: 6379,
+            REDIS_PASSWORD: None}
+
 
 def parse_config(conf):
     '''conf is a file or file-like pointer'''
@@ -136,24 +142,174 @@ def parse_config(conf):
             CLIENT_ID: config.get('autobot', 'client_id'),
             CLIENT_SECRET: config.get('autobot', 'client_secret'),
             POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
-            DATAFILE: config.get('autobot', 'datafile'),
-            SUBREDDIT: config.get('autobot', 'subreddit')
+            SUBREDDIT: config.get('autobot', 'subreddit'),
+            REDIS_BACKEND: config.get('autobot', 'redis_backend'),
+            REDIS_URL: config.get('autobot', 'redis_url'),
+            REDIS_PORT: config.getint('autobot', 'redis_port')
         }
 
 def get_environment_configuration():
     """Gets configurations specified in environment variables"""
+
+    try:
+        time_limit = int(os.getenv('AUTOBOT_POST_TIMELIMIT'))
+    except TypeError:
+        time_limit = None
+
+    # if we're using Redis Labs
+    redis_cloud_url = os.getenv('REDISCLOUD_URL')
+
+    if redis_cloud_url:
+        url = urlparse.urlparse(redis_cloud_url)
+        redis_host = url.hostname
+        redis_port = url.port
+        redis_password = url.password
+    else:
+        redis_host = os.getenv('AUTOBOT_REDIS_URL')
+        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
+        redis_password = None
+
     override = {
             REDDIT_USERNAME: os.getenv('AUTOBOT_REDDIT_USERNAME'),
             REDDIT_PASSWORD: os.getenv('AUTOBOT_REDDIT_PASSWORD'),
             SUBREDDIT: os.getenv('AUTOBOT_SUBREDDIT'),
             CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
             CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
-            DATAFILE: os.getenv('AUTOBOT_DATAFILE'),
-            POST_TIMELIMIT: os.getenv('AUTOBOT_POST_TIMELIMIT')
+            POST_TIMELIMIT: time_limit,
+            REDIS_BACKEND: os.getenv('AUTOBOT_REDIS_BACKEND'),
+            REDIS_URL: redis_host,
+            REDIS_PORT: redis_port,
+            REDIS_PASSWORD: redis_password
     }
 
     # remove all the 'None' valued things
-    return {k:v for k,v in override.items() if v is not None}
+    return {k: v for k, v in override.items() if v is not None}
+
+class Autobot(object):
+    def __init__(self, configuration):
+        self.time_between_posts = configuration[POST_TIMELIMIT]
+
+        self.reddit = praw.Reddit(user_agent='/r/nosleep Autobot v 1.0 (by /u/SofaAssassin)',
+                client_id=configuration[CLIENT_ID],
+                client_secret=configuration[CLIENT_SECRET],
+                username=configuration[REDDIT_USERNAME],
+                password=configuration[REDDIT_PASSWORD])
+
+        self.subreddit = self.reddit.subreddit(configuration[SUBREDDIT])
+
+        self.moderator = SubredditModeration(self.subreddit)
+
+        self.time_limit_between_posts = configuration[POST_TIMELIMIT]
+
+        if not self.subreddit.user_is_moderator:
+            raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], subreddit.display_name))
+
+    def submission_previously_seen(self, submission):
+        try:
+            post = AutobotSubmission.get(AutobotSubmission.submission_id == submission.id)
+            return True
+        except ValueError:
+            return False
+
+    def reject_submission_by_timelimit(self, submission):
+        """Determine if a submission should be removed based on a time-limit
+        for submissions for a subreddit."""
+
+        now = int(time.time())
+        user_posts = self.get_last_subreddit_submissions(submission.author)
+
+        most_recent = None
+        for p in user_posts:
+            if p.id != submission.id:
+                most_recent = p
+                break
+
+        # If we found a post that wasn't our own
+        if most_recent:
+            next_post_allowed_time = most_recent.created_utc + self.time_limit_between_posts
+            if (next_post_allowed_time > now) and (submission.id != most_recent.id):
+                logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(submission.id, submission.author.name))
+                return True
+
+        return False
+
+    def get_recent_submissions(self):
+        """Get most recent submissions from the subreddit (right now it fetches the last hour's worth of results)."""
+        logging.info("Retrieving submissions from the last hour")
+        submissions = list(self.subreddit.search('subreddit:{0}'.format(self.subreddit.display_name), time_filter='day', syntax='lucene', sort='new'))
+        logging.info("Found {0} submissions in /r/{1} from the last day.".format(len(submissions), self.subreddit.display_name))
+        return submissions
+
+    def get_last_subreddit_submissions(self, redditor, sort='new'):
+        # Retrieve the data from the API of all the posts made by this author in the last 24 hours.
+        search_results = list(self.subreddit.search('author:{0}'.format(redditor.name), time_filter='day', syntax='lucene', sort=sort))
+        logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
+                         len(search_results), redditor.name, self.subreddit.display_name))
+        return search_results
+
+    def process_time_limit_message(self, submission):
+
+        # Because it's hard to determine if something's actually been
+        # deleted, this has to just find the most recent posts by the user
+        # from the last day.
+
+        user_posts = self.get_last_subreddit_submissions(submission.author)
+        most_recent = max(user_posts, key=lambda i: i.created_utc)
+
+        time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
+
+        fmt_msg = POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_to_next_post))
+
+        self.moderator.distinguish(submission.reply(fmt_msg))
+        self.moderator.remove(submission)
+
+    def run(self):
+        """Run the autobot to find posts."""
+        submissions = self.get_recent_submissions()
+
+
+        # for all submissions, check to see if any of them should be rejected based on the time limit
+        for s in submissions:
+
+            obj = AutobotSubmission(
+                submission_id=s.id,
+                author=s.author.name,
+                submission_time=int(s.created_utc),
+                is_series=False,
+                sent_series_pm=False,
+                deleted=False)
+
+
+            if self.submission_previously_seen(s):
+                logging.info("Submission {0} was previously processed. Skipping.".format(s.id))
+                continue
+
+            if self.reject_submission_by_timelimit(s):
+                logging.info("Rejecting submission {0} because of time limit".format(s.id))
+                self.process_time_limit_message(s)
+                obj.deleted = True
+            else:
+                post_tags = categorize_tags(s.title)
+                if post_tags['invalid_tags']:
+                    # We have bad tags! Delete post and send PM.
+                    logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
+                    s.author.message("Your post on /r/nosleep has been removed due to invalid tags", DISALLOWED_TAGS_MESSAGE, self.subreddit)
+                    moderator.remove(s)
+                    obj.deleted = True
+                elif post_tags['valid_tags']:
+                    # We have series tags in place. Send a PM
+                    logging.info("Series tags found")
+                    s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), self.subreddit)
+                    obj.is_series = True
+                    obj.sent_series_pm = True
+                else:
+                    # We had no tags at all.
+                    logging.info("No tags")
+
+            logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, self.time_limit_between_posts))
+            obj.save()
+            AutobotSubmission.set_ttl(obj, self.time_limit_between_posts)
+
 
 if __name__ == '__main__':
 
@@ -171,60 +327,11 @@ if __name__ == '__main__':
     # Environment variables override configuration file settings
     env_config = get_environment_configuration()
     configuration.update(env_config)
-    
-    logging.info("autobot rolling out with settings...")
-    logging.info("Subreddit: {0}".format(configuration[SUBREDDIT]))
-    logging.info("Reddit username: {0}".format(configuration[REDDIT_USERNAME]))
-    logging.info("Redis datafile: {0}".format(configuration[DATAFILE]))
-    logging.info("Time between allowed top-level posts: {0} seconds".format(configuration[POST_TIMELIMIT]))
 
-    reddit = praw.Reddit(user_agent='r/nosleep Autobot v 1.0 (by /u/SofaAssassin)',
-                client_id=configuration[CLIENT_ID],
-                client_secret=configuration[CLIENT_SECRET],
-                username=configuration[REDDIT_USERNAME],
-                password=configuration[REDDIT_PASSWORD])
+    # This is hack-city, but since we're constructing the redis data
+    # after the fact, we'll now bolt the database back into the baseclass
+    walrus = Walrus(host=configuration[REDIS_URL], port=configuration[REDIS_PORT], password=configuration[REDIS_PASSWORD])
+    AutobotBaseModel.set_database(walrus)
 
-    walrus = WalrusLite(configuration[DATAFILE])
-    subreddit = reddit.subreddit(configuration[SUBREDDIT])
-
-    logging.info("Datafile used by walrus: {0}".format(configuration[DATAFILE]))
-
-    if not subreddit.user_is_moderator:
-        # Bail early because bot doesn't have moderator privilege
-        raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], configuration[SUBREDDIT]))
-
-    mod = SubredditModeration(subreddit)
-
-    for submission in subreddit.stream.submissions():
-        # for each submission, look up if the user information was already cached.
-        # If it hasn't been, add it.
-        # If it has, determine if user has posted in the last 24 hours.
-        # If user has posted in last 24 hours, then delete the post contents and make
-        # a distinguished top-level post.
-        now = int(time.time())
-        logging.info("Reviewing post '{0}' submitted by '{1}' on {2}".format(submission.id, submission.author.name, submission.created_utc))
-
-        if reject_submission_by_timelimit(submission, now, configuration[POST_TIMELIMIT], walrus):
-            # make a distinguished comment and remove post
-            logging.info("Rejecting submission {0} because of time limit".format(submission.id))
-            valid_date = (submission.created_utc + configuration[POST_TIMELIMIT]) - now
-            time_until_can_post = datetime.timedelta(seconds=valid_date)
-
-            # convert timestamp back to English text to be more helpful
-            fmt_msg = POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_until_can_post))
-            mod.distinguish(submission.reply(fmt_msg))
-            mod.remove(submission)
-        else:
-            post_tags = categorize_tags(submission.title)
-            if post_tags['invalid_tags']:
-                # We have bad tags! Delete post and send PM.
-                logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                submission.author.message("Your post on /r/nosleep has been removed due to invalid tags", DISALLOWED_TAGS_MESSAGE, subreddit)
-                mod.remove(submission)
-            elif post_tags['valid_tags']:
-                # We have series tags in place. Send a PM
-                logging.info("Series tags found")
-                submission.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=submission.shortlink), subreddit)
-            else:
-                # We had no tags at all.
-                logging.info("No tags")
+    bot = Autobot(configuration)
+    bot.run()
