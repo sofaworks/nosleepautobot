@@ -297,7 +297,7 @@ class Autobot(object):
                     # We have bad tags! Delete post and send PM.
                     logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
                     s.author.message("Your post on /r/nosleep has been removed due to invalid tags", DISALLOWED_TAGS_MESSAGE, self.subreddit)
-                    moderator.remove(s)
+                    self.moderator.remove(s)
                     obj.deleted = True
                 elif post_tags['valid_tags']:
                     # We have series tags in place. Send a PM
