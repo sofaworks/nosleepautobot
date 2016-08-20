@@ -254,7 +254,10 @@ class Autobot(object):
         # from the last day.
 
         user_posts = self.get_last_subreddit_submissions(submission.author)
-        most_recent = max(user_posts, key=lambda i: i.created_utc)
+        for p in user_posts:
+            if p.id != submission.id:
+                most_recent = p
+                break
 
         time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
 
