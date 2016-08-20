@@ -30,6 +30,11 @@ REDIS_PORT = 'redis_port'
 REDIS_PASSWORD = 'redis_password'
 
 
+class NoSuchFlairError(Exception):
+    """Custom exception class when a flair doesn't exist."""
+    pass
+
+
 class AutobotBaseModel(Model):
     database = None
     namespace = 'autobot'
@@ -62,7 +67,7 @@ POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per
                       )
 
 
-DISALLOWED_TAGS_MESSAGE = ('Hi there! Your post has been removed from /r/nosleep '
+DISALLOWED_TAGS_MESSAGE = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
                             'as we have strict rules about tags in story titles:\n\n'
                             '**Tags (example: [True], [real experience]) are not allowed.** '
                             'The only thing in brackets **[]**, **{}** or parenthesis **()** '
@@ -266,6 +271,18 @@ class Autobot(object):
         self.moderator.distinguish(submission.reply(fmt_msg))
         self.moderator.remove(submission)
 
+    def set_submission_flair(self, submission, flair):
+        """Set a flair for a submission."""
+        for f in submission.flair.choices():
+            if f['flair_css_class'].lower() == flair.lower():
+                try:
+                    submission.flair.select(f['flair_template_id'])
+                    return
+                except KeyError:
+                    # Huh, that's weird, our flair doesn't have the key we expected
+                    raise
+        raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
+
     def run(self):
         """Run the autobot to find posts."""
         submissions = self.get_recent_submissions()
@@ -282,13 +299,11 @@ class Autobot(object):
                 sent_series_pm=False,
                 deleted=False)
 
-
             if self.submission_previously_seen(s):
                 logging.info("Submission {0} was previously processed. Skipping.".format(s.id))
                 continue
 
             if self.reject_submission_by_timelimit(s):
-                logging.info("Rejecting submission {0} because of time limit".format(s.id))
                 self.process_time_limit_message(s)
                 obj.deleted = True
             else:
@@ -296,13 +311,20 @@ class Autobot(object):
                 if post_tags['invalid_tags']:
                     # We have bad tags! Delete post and send PM.
                     logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                    s.author.message("Your post on /r/nosleep has been removed due to invalid tags", DISALLOWED_TAGS_MESSAGE, self.subreddit)
+                    s.author.message("Your post on /r/nosleep has been removed due to invalid tags", DISALLOWED_TAGS_MESSAGE.safe_substitute(post_url=s.shortlink), self.subreddit)
                     self.moderator.remove(s)
                     obj.deleted = True
                 elif post_tags['valid_tags']:
                     # We have series tags in place. Send a PM
                     logging.info("Series tags found")
                     s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), self.subreddit)
+
+                    # set the series flair for this post
+                    try:
+                        self.set_submission_flair(s, flair='flair-series')
+                    except Exception as e:
+                        logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
+
                     obj.is_series = True
                     obj.sent_series_pm = True
                 else:
