@@ -69,13 +69,13 @@ POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per
                       )
 
 
-DISALLOWED_TAGS_MESSAGE = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
-                            'as we have strict rules about tags in story titles:\n\n'
-                            '**Tags (example: [True], [real experience]) are not allowed.** '
-                            'The only thing in brackets **[]**, **{}** or parenthesis **()** '
-                            'should be a reference to which "part" of your series the post is. '
-                            '**Example**: (part 1) or [Pt2].\n\n'
-                            'You will need to delete your story and repost with a corrected title.')
+DISALLOWED_TAGS_MESSAGE = ('Hi there! Your post has been removed from /r/nosleep '
+                           'as we have strict rules about tags in story titles:\n\n'
+                           '**Tags (example: [True], [real experience]) are not allowed.** '
+                           'The only thing in brackets **[]**, **{}** or parenthesis **()** '
+                           'should be a reference to which "part" of your series the post is. '
+                           '**Example**: (part 1) or [Pt2].\n\n'
+                           'Since titles cannot be edited on Reddit, please repost your story with a corrected title.')
 
 
 SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep series! '
@@ -109,7 +109,7 @@ def categorize_tags(title):
     tag_cats = {'valid_tags': [], 'invalid_tags': []}
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
-    allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|final|update)$")
+    allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.|update)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|final)$")
     matches = [m.group() for m in re.finditer("\[([^]]*)\]|\((.*?)\)|\{(.*?)\}", title)]
     # for each match check if it's in the accepted list of tags
 
@@ -253,7 +253,10 @@ class AutoBot(object):
 
     def get_last_subreddit_submissions(self, redditor, sort='new'):
         # Retrieve the data from the API of all the posts made by this author in the last 24 hours.
-        search_results = list(self.subreddit.search('author:{0}'.format(redditor.name), time_filter='day', syntax='lucene', sort=sort))
+        # This has to be done via cloudsearch because Reddit apparently doesn't enable
+        # semantic hyphening in their lucene indexes, so user names with hyphens in them
+        # will return improper results.
+        search_results = list(self.subreddit.search("author:'{0}'".format(redditor.name), time_filter='day', syntax='cloudsearch', sort=sort))
         logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
                          len(search_results), redditor.name, self.subreddit.display_name))
         return search_results
@@ -315,13 +318,13 @@ class AutoBot(object):
                 if post_tags['invalid_tags']:
                     # We have bad tags! Delete post and send PM.
                     logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                    s.author.message("Your post on /r/nosleep has been removed due to invalid tags", DISALLOWED_TAGS_MESSAGE.safe_substitute(post_url=s.shortlink), self.subreddit)
+                    self.moderator.distinguish(s.reply(DISALLOWED_TAGS_MESSAGE))
                     self.moderator.remove(s)
                     obj.deleted = True
                 elif post_tags['valid_tags']:
                     # We have series tags in place. Send a PM
                     logging.info("Series tags found")
-                    s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), self.subreddit)
+                    s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
 
                     # set the series flair for this post
                     try:
