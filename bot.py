@@ -12,9 +12,11 @@ import sys
 import os
 import re
 
+import rollbar
 import praw
 from walrus import Walrus, Model, TextField, IntegerField, BooleanField
 from praw.models.reddit.subreddit import SubredditModeration
+
 
 
 USER_AGENT = 'user_agent'
@@ -35,7 +37,7 @@ class NoSuchFlairError(Exception):
     pass
 
 
-class AutobotBaseModel(Model):
+class AutoBotBaseModel(Model):
     database = None
     namespace = 'autobot'
 
@@ -44,7 +46,7 @@ class AutobotBaseModel(Model):
         cls.database = db
 
 
-class AutobotSubmission(AutobotBaseModel):
+class AutoBotSubmission(AutoBotBaseModel):
     submission_id = TextField(primary_key=True)
     author = TextField(index=True)
     submission_time = IntegerField()
@@ -86,7 +88,9 @@ SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep
 
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
-    parser.add_argument('-c', '--conf', required=False, type=str)
+    parser.add_argument('-c', '--conf', required=False, type=str, help='Configuration file to use for the bot')
+    parser.add_argument('--forever', required=False, action='store_true', help='If specified, runs bot forever.')
+    parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
     return parser
 
 def categorize_tags(title):
@@ -130,8 +134,8 @@ def englishify_time(seconds):
 def get_bot_defaults():
     """Returns some defaults for running the bot."""
     return {POST_TIMELIMIT: 86400,
-            REDIS_BACKEND: 'rlite',
-            REDIS_URL: ':memory:',
+            REDIS_BACKEND: 'redis',
+            REDIS_URL: 'localhost',
             REDIS_PORT: 6379,
             REDIS_PASSWORD: None}
 
@@ -190,11 +194,11 @@ def get_environment_configuration():
     # remove all the 'None' valued things
     return {k: v for k, v in override.items() if v is not None}
 
-class Autobot(object):
+class AutoBot(object):
     def __init__(self, configuration):
         self.time_between_posts = configuration[POST_TIMELIMIT]
 
-        self.reddit = praw.Reddit(user_agent='/r/nosleep Autobot v 1.0 (by /u/SofaAssassin)',
+        self.reddit = praw.Reddit(user_agent='/r/nosleep AutoBot v 1.0 (by /u/SofaAssassin)',
                 client_id=configuration[CLIENT_ID],
                 client_secret=configuration[CLIENT_SECRET],
                 username=configuration[REDDIT_USERNAME],
@@ -211,7 +215,7 @@ class Autobot(object):
 
     def submission_previously_seen(self, submission):
         try:
-            post = AutobotSubmission.get(AutobotSubmission.submission_id == submission.id)
+            post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
             return True
         except ValueError:
             return False
@@ -283,15 +287,13 @@ class Autobot(object):
                     raise
         raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
 
-    def run(self):
-        """Run the autobot to find posts."""
-        submissions = self.get_recent_submissions()
-
+    def process_posts(self):
+        cache_ttl = self.time_limit_between_posts * 2
 
         # for all submissions, check to see if any of them should be rejected based on the time limit
-        for s in submissions:
+        for s in self.get_recent_submissions():
 
-            obj = AutobotSubmission(
+            obj = AutoBotSubmission(
                 submission_id=s.id,
                 author=s.author.name,
                 submission_time=int(s.created_utc),
@@ -329,11 +331,35 @@ class Autobot(object):
                     obj.sent_series_pm = True
                 else:
                     # We had no tags at all.
-                    logging.info("No tags")
+                    logging.info("No tags found in post title.")
 
-            logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, self.time_limit_between_posts))
+            logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
             obj.save()
-            AutobotSubmission.set_ttl(obj, self.time_limit_between_posts)
+
+            # Save for double the TTL in case Reddit's API returns things out
+            # of the search date range
+            AutoBotSubmission.set_ttl(obj, cache_ttl)
+
+
+    def run(self, forever=False, interval=300):
+        """Run the autobot to find posts. Can be specified to run `forever`
+        at `interval` seconds per run."""
+
+        bot_start_time = time.time()
+
+        while True:
+            try:
+                self.process_posts()
+            except:
+                rollbar.report_exc_info()
+
+            if not forever:
+                break
+
+            sleep_interval = float(interval) - ((time.time() - bot_start_time) % float(interval))
+
+            logging.info("Sleeping for {0} seconds until next run.".format(sleep_interval))
+            time.sleep(sleep_interval)
 
 
 if __name__ == '__main__':
@@ -353,10 +379,13 @@ if __name__ == '__main__':
     env_config = get_environment_configuration()
     configuration.update(env_config)
 
+
+    rollbar.init(os.getenv('ROLLBAR_ACCESS_TOKEN'), os.getenv('ROLLBAR_ENVIRONMENT'))
+
     # This is hack-city, but since we're constructing the redis data
     # after the fact, we'll now bolt the database back into the baseclass
     walrus = Walrus(host=configuration[REDIS_URL], port=configuration[REDIS_PORT], password=configuration[REDIS_PASSWORD])
-    AutobotBaseModel.set_database(walrus)
+    AutoBotBaseModel.set_database(walrus)
 
-    bot = Autobot(configuration)
-    bot.run()
+    bot = AutoBot(configuration)
+    bot.run(args.forever, args.interval)
