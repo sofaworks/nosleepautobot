@@ -236,9 +236,9 @@ class AutoBot(object):
             # probably means user_posts was empty...which would be super weird.
             most_recent = None
 
-        if most_recent:
+        if most_recent and (most_recent.id != submission.id):
             next_post_allowed_time = most_recent.created_utc + self.time_limit_between_posts
-            if (next_post_allowed_time > now) and (most_recent.id != submission.id):
+            if next_post_allowed_time > now:
                 logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(submission.id, submission.author.name))
                 return True
 
@@ -264,10 +264,7 @@ class AutoBot(object):
         # deleted, this has to just find the most recent posts by the user
         # from the last day.
         user_posts = self.get_last_subreddit_submissions(submission.author)
-        try:
-            most_recent = min(user_posts, key=lambda i: i.created_utc)
-        except ValueError:
-            most_recent = None
+        most_recent = min(user_posts, key=lambda i: i.created_utc)
 
         time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
 
@@ -297,6 +294,7 @@ class AutoBot(object):
         recents = sorted(self.get_recent_submissions(), key=lambda x: x.created_utc)
         logging.info("Processing submissions: {0}".format(recents))
         for s in recents:
+            logging.info("Processing submission {0}.".format(s.id))
             obj = AutoBotSubmission(
                 submission_id=s.id,
                 author=s.author.name,
