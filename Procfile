@@ -1,1 +1,1 @@
-worker: python bot.py --forever
+worker: python bot.py --forever --interval 180
