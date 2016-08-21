@@ -13,10 +13,10 @@ NoxBot performs several moderator tasks automatically that would otherwise be an
    Users on NoSleep are only allowed to post once every 24 hours. NoxBot checks each new post's author's history to make sure they haven't posted to the subreddit in the last 24-hours. If they have, NoxBot removes the post and makes a comment on the post informing the author of the rule and telling them the time until they can next post.
 * **NoxBot performs checks for NoSleep's title tags rules.**
 
-  NoSleep has strict rules about what sorts of "tags" (things in braces/brackets) can be used in the titles of posts. In short, the only thing allowed in title tags is the part of the story if the story is a series (ex. [Part 1]). NoxBot checks each post for tags and uses a complex regex to determine if the tags are valid or not. If the tags are *not* valid, it removes the post from NoSleep and sends a message (via modmail) to the user telling them what happened and informing them of the rule.
+  NoSleep has strict rules about what sorts of "tags" (things in braces/brackets) can be used in the titles of posts. In short, the only thing allowed in title tags is the part of the story if the story is a series (ex. [Part 1]). NoxBot checks each post for tags and uses a complex regex to determine if the tags are valid or not. If the tags are *not* valid, it removes the post from NoSleep and makes a comment on the post telling the user what happened and informing them of the rule.
 * **NoxBot provides information/rule reminders via PM to authors when they post a new part of a series.**
 
-  If NoxBot detects valid "series" tags in a post title, it will PM the author of the story (via modmail) and remind them that they should double-check the flair on their post, and link back to previous parts of the story. This is not a reprimand in any way -- rather, it is a friendly reminder for series posts.
+  If NoxBot detects valid "series" tags in a post title, it will PM the author of the story (via the /r/NoSleepAutoBot user itself) and remind them that they should double-check the flair on their post, and link back to previous parts of the story. This is not a reprimand in any way -- rather, it is a friendly reminder for series posts.
 
 * **NoxBot flairs things as "series" when it detects a post is a series.**
 
