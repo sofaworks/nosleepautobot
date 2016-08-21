@@ -225,18 +225,20 @@ class AutoBot(object):
         for submissions for a subreddit."""
 
         now = int(time.time())
+
+        # We get submissions in ascending order (so, oldest ones first from last hour).
+        # We want to find the most recent post (as in the oldest timestamp)
         user_posts = self.get_last_subreddit_submissions(submission.author)
 
-        most_recent = None
-        for p in user_posts:
-            if p.id != submission.id:
-                most_recent = p
-                break
+        try:
+            most_recent = min(user_posts, key=lambda i: i.created_utc)
+        except ValueError:
+            # probably means user_posts was empty...which would be super weird.
+            most_recent = None
 
-        # If we found a post that wasn't our own
         if most_recent:
             next_post_allowed_time = most_recent.created_utc + self.time_limit_between_posts
-            if (next_post_allowed_time > now) and (submission.id != most_recent.id):
+            if (next_post_allowed_time > now) and (most_recent.id != submission.id):
                 logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(submission.id, submission.author.name))
                 return True
 
@@ -261,12 +263,11 @@ class AutoBot(object):
         # Because it's hard to determine if something's actually been
         # deleted, this has to just find the most recent posts by the user
         # from the last day.
-
         user_posts = self.get_last_subreddit_submissions(submission.author)
-        for p in user_posts:
-            if p.id != submission.id:
-                most_recent = p
-                break
+        try:
+            most_recent = min(user_posts, key=lambda i: i.created_utc)
+        except ValueError:
+            most_recent = None
 
         time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
 
@@ -291,8 +292,11 @@ class AutoBot(object):
         cache_ttl = self.time_limit_between_posts * 2
 
         # for all submissions, check to see if any of them should be rejected based on the time limit
-        for s in self.get_recent_submissions():
-
+        # Get all recent submissions and then sort them into ascending order
+        # As each submission is processed, check it against a user's new posts in descending posted order
+        recents = sorted(self.get_recent_submissions(), key=lambda x: x.created_utc)
+        logging.info("Processing submissions: {0}".format(recents))
+        for s in recents:
             obj = AutoBotSubmission(
                 submission_id=s.id,
                 author=s.author.name,
@@ -333,12 +337,12 @@ class AutoBot(object):
                     # We had no tags at all.
                     logging.info("No tags found in post title.")
 
-            logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
-            obj.save()
+                logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
+                obj.save()
 
-            # Save for double the TTL in case Reddit's API returns things out
-            # of the search date range
-            AutoBotSubmission.set_ttl(obj, cache_ttl)
+                # Save for double the TTL in case Reddit's API returns things out
+                # of the search date range
+                AutoBotSubmission.set_ttl(obj, cache_ttl)
 
 
     def run(self, forever=False, interval=300):
