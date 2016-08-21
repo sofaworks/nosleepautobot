@@ -1,4 +1,4 @@
-## NoxBot [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master)
+## NoxBot [![CircleCI Production branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production)
 
 ## What is NoxBot?
 
