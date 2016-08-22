@@ -247,8 +247,8 @@ class AutoBot(object):
     def get_recent_submissions(self):
         """Get most recent submissions from the subreddit (right now it fetches the last hour's worth of results)."""
         logging.info("Retrieving submissions from the last hour")
-        submissions = list(self.subreddit.search('subreddit:{0}'.format(self.subreddit.display_name), time_filter='day', syntax='lucene', sort='new'))
-        logging.info("Found {0} submissions in /r/{1} from the last day.".format(len(submissions), self.subreddit.display_name))
+        submissions = list(self.subreddit.search('subreddit:{0}'.format(self.subreddit.display_name), time_filter='hour', syntax='lucene', sort='new'))
+        logging.info("Found {0} submissions in /r/{1} from the last hour.".format(len(submissions), self.subreddit.display_name))
         return submissions
 
     def get_last_subreddit_submissions(self, redditor, sort='new'):
