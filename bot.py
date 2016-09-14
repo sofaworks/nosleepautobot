@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 from string import Template
+from collections import namedtuple
 import ConfigParser
+import itertools
 import urlparse
 import datetime
 import argparse
@@ -16,7 +18,6 @@ import rollbar
 import praw
 from walrus import Walrus, Model, TextField, IntegerField, BooleanField
 from praw.models.reddit.subreddit import SubredditModeration
-
 
 
 USER_AGENT = 'user_agent'
@@ -59,6 +60,9 @@ class AutoBotSubmission(AutoBotBaseModel):
         submission.to_hash().expire(ttl=ttl)
 
 
+FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
+
+
 POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
                       'in order to give all submitters here an equal shot at the front page.\n\n'
                       'As such, your post has been removed. Feel free to repost your story '
@@ -68,14 +72,24 @@ POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per
                       '[message the moderators](http://www.reddit.com/message/compose?to=%2Fr%2Fnosleep).'
                       )
 
+PERMANENT_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
+                                    'for violating the following rules: ')
 
-DISALLOWED_TAGS_MESSAGE = ('Hi there! Your post has been removed from /r/nosleep '
-                           'as we have strict rules about tags in story titles:\n\n'
-                           '**Tags (example: [True], [real experience]) are not allowed.** '
+TEMPORARY_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been **temporarily** '
+                                    'removed from /r/nosleep due to the following formatting issues '
+                                    'detected in your post: ')
+
+DISALLOWED_TAGS_MESSAGE = ('* **Invalid Tags**',
+                           '  /r/nosleep has strict rules about tags in story titles:\n\n'
+                           '  **Tags (example: [True], [real experience]) are not allowed.** '
                            'The only thing in brackets **[]**, **{}** or parenthesis **()** '
                            'should be a reference to which "part" of your series the post is. '
-                           '**Example**: (part 1) or [Pt2].\n\n'
-                           'Since titles cannot be edited on Reddit, please repost your story with a corrected title.')
+                           '**Example**: (part 1) or [Pt2].\n\n')
+
+REPOST_MESSAGE = '**Since titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
+
+ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following formatting issues have been detected in your post, ',
+                                 'which may make your post unreadable. Please correct them when re-posting your story.\n\n')
 
 
 SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep series! '
@@ -85,6 +99,23 @@ SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep
                   "Don't know how to add flair? Visit your story's comment page "
                   'and look underneath the post itself. Click on the **flair** button '
                   'to bring up a list of options. Choose the "series" option and hit "save"!')
+
+LONG_PARAGRAPH_MESSAGE= ('* **Long Paragraphs Detected**\n\n'
+                         '  You have one or more paragraphs containing more than 350 words. '
+                         'Please break up your story into smaller paragraphs. You can create paragraphs '
+                         'by pressing `Enter` twice at the end of a line.')
+
+CODEBLOCK_MESSAGE = ('\n\n* **Paragraph with 4 (or more) Starting Spaces Detected**\n\n'
+                     '  You have one or more paragraphs beginning with four or more spaces.\n\n'
+                     '  On Reddit, lines beginning with four or more spaces are treated as '
+                     'blocks of code and make your story unreadable. Please remove spaces at the beginning '
+                     'of paragraphs/lines. You can create paragraphs by pressing `Enter` twice at the end '
+                     'of a line if you haven\'t already done so.')
+
+FORMATTING_CLOSE = ('\n\nOnce you have fixed your formatting issues, please respond to this PM for re-approval. '
+                    'The re-approval process is manual, so send a single request only. Multiple requests '
+                    'do not mean faster approval; in fact they will clog the modqueue and result in '
+                    're-approvals taking even more time.')
 
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
@@ -130,6 +161,26 @@ def englishify_time(seconds):
     minutes, seconds = divmod(remainder, 60)
 
     return '{0} hours, {1} minutes, {2} seconds'.format(int(hours), int(minutes), int(seconds))
+
+def paragraphs_too_long(paragraphs, max_word_count=350):
+    for p in paragraphs:
+        if max_word_count < len(re.findall(r'\w+', p)):
+            return True
+    return False
+
+def contains_codeblocks(paragraphs):
+    for p in paragraphs:
+        if p.startswith('    '):
+            return True
+    return False
+
+def collect_formatting_issues(post_body):
+    # split the post body by paragraphs
+    paragraphs = post_body.split('\n\n')
+    return FormattingIssues(
+            paragraphs_too_long(paragraphs),
+            contains_codeblocks(paragraphs))
+
 
 def get_bot_defaults():
     """Returns some defaults for running the bot."""
@@ -288,6 +339,31 @@ class AutoBot(object):
                     raise
         raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
 
+    def prepare_delete_message(self, post, formatting_issues, invalid_tags):
+        final_message = []
+        if invalid_tags:
+            final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
+            final_message.append(REPOST_MESSAGE)
+            if any(formatting_issues):
+                final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
+
+                if formatting_issues.long_paragraphs:
+                    final_message.append(LONG_PARAGRAPH_MESSAGE)
+                if formatting_issues.has_codeblocks:
+                    final_message.append(CODEBLOCK_MESSAGE)
+        else:
+            if any(formatting_issues):
+                final_message.append(TEMPORARY_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
+
+                if formatting_issues.long_paragraphs:
+                    final_message.append(LONG_PARAGRAPH_MESSAGE)
+                if formatting_issues.has_codeblocks:
+                    final_message.append(CODEBLOCK_MESSAGE)
+                final_message.append(FORMATTING_CLOSE)
+
+        return ''.join(final_message)
+
+
     def process_posts(self):
         cache_ttl = self.time_limit_between_posts * 2
 
@@ -314,11 +390,22 @@ class AutoBot(object):
                 self.process_time_limit_message(s)
                 obj.deleted = True
             else:
+                # Here we want all the formatting and tag issues
+                formatting_issues = collect_formatting_issues(s.selftext)
+
                 post_tags = categorize_tags(s.title)
+
                 if post_tags['invalid_tags']:
                     # We have bad tags! Delete post and send PM.
                     logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                    self.moderator.distinguish(s.reply(DISALLOWED_TAGS_MESSAGE))
+                    message = self.prepare_delete_message(s, formatting_issues, True)
+                    self.moderator.distinguish(s.reply(message))
+                    self.moderator.remove(s)
+                    obj.deleted = True
+                elif any(formatting_issues):
+                    logging.info("Formatting issues found.")
+                    message = self.prepare_delete_message(s, formatting_issues, False)
+                    s.author.message("Please correct formatting issues in your r/nosleep post", message, self.subreddit)
                     self.moderator.remove(s)
                     obj.deleted = True
                 elif post_tags['valid_tags']:
@@ -378,7 +465,7 @@ if __name__ == '__main__':
 
     if args.conf:
         with open(args.conf) as cfile:
-            configuration = parse_config(cfile)
+            configuration.update(parse_config(cfile))
 
     # Environment variables override configuration file settings
     env_config = get_environment_configuration()

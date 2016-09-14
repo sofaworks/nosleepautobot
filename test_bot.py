@@ -4,6 +4,28 @@ import bot
 
 class TestBotMethods(unittest.TestCase):
 
+    def test_reject_long_paragraphs(self):
+        '''This test asserts that paragraphs > (length) words are rejected.'''
+
+        # Basic test with just words
+        text = ' '.join(['text'] * 351)
+        self.assertTrue(bot.paragraphs_too_long([text]))
+
+        # More advanced with punctuations and such.
+        # In a naive implementation, word counting
+        # could be affected by just splitting on spaces
+        # and then things like standalone & would be counted.
+        # i.e. len(text.split())
+        add_text = ' '.join(['text'] * 349)
+        add_text += '& -- text'
+        self.assertFalse(bot.paragraphs_too_long([add_text]))
+
+    def test_contains_codeblocks(self):
+        '''Test for codeblocks'''
+
+        text = '    This starts with four spaces'
+        self.assertTrue(bot.contains_codeblocks([text]))
+
     def test_categorize_tags(self):
         title = 'This is a sample post (volume 1) {part 2}'
         tags = bot.categorize_tags(title)
