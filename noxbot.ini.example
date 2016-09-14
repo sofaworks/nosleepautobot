@@ -1,4 +1,4 @@
-[noxbot]
+[autobot]
 subreddit: nosleep
 seconds_between_allowed_posts: 86400
 user: YOUR-REDDIT-USER-NAME-HERE
