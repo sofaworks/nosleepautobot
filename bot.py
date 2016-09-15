@@ -73,11 +73,11 @@ POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per
                       )
 
 PERMANENT_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
-                                    'for violating the following rules: ')
+                                    'for violating the following rules:\n\n')
 
 TEMPORARY_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been **temporarily** '
                                     'removed from /r/nosleep due to the following formatting issues '
-                                    'detected in your post: ')
+                                    'detected in your post:\n\n')
 
 DISALLOWED_TAGS_MESSAGE = ('* **Invalid Tags**'
                            '  /r/nosleep has strict rules about tags in story titles:\n\n'
@@ -343,6 +343,7 @@ class AutoBot(object):
         final_message = []
         if invalid_tags:
             final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
+            final_message.append(DISALLOWED_TAGS_MESSAGE)
             final_message.append(REPOST_MESSAGE)
             if any(formatting_issues):
                 final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
