@@ -1,6 +1,6 @@
 decorator==4.0.10
 hirlite==0.2.0
-praw==4.0.0b14
+praw==4.0.0b17
 prawcore==0.2.1
 redis==2.10.5
 requests==2.11.1

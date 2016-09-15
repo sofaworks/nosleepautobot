@@ -79,7 +79,7 @@ TEMPORARY_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has
                                     'removed from /r/nosleep due to the following formatting issues '
                                     'detected in your post: ')
 
-DISALLOWED_TAGS_MESSAGE = ('* **Invalid Tags**',
+DISALLOWED_TAGS_MESSAGE = ('* **Invalid Tags**'
                            '  /r/nosleep has strict rules about tags in story titles:\n\n'
                            '  **Tags (example: [True], [real experience]) are not allowed.** '
                            'The only thing in brackets **[]**, **{}** or parenthesis **()** '
@@ -88,7 +88,7 @@ DISALLOWED_TAGS_MESSAGE = ('* **Invalid Tags**',
 
 REPOST_MESSAGE = '**Since titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
 
-ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following formatting issues have been detected in your post, ',
+ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following formatting issues have been detected in your post, '
                                  'which may make your post unreadable. Please correct them when re-posting your story.\n\n')
 
 
