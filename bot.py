@@ -176,7 +176,7 @@ def contains_codeblocks(paragraphs):
 
 def collect_formatting_issues(post_body):
     # split the post body by paragraphs
-    paragraphs = post_body.split('\n\n')
+    paragraphs = re.split(r'\n\s*\n', post_body)
     return FormattingIssues(
             paragraphs_too_long(paragraphs),
             contains_codeblocks(paragraphs))
