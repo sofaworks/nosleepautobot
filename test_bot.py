@@ -20,6 +20,18 @@ class TestBotMethods(unittest.TestCase):
         add_text += '& -- text'
         self.assertFalse(bot.paragraphs_too_long([add_text]))
 
+
+    def test_reject_long_paragraphs_funky_newlines(self):
+        '''Test edge case long paragraphs (newlines)'''
+
+        # This test sees if paragraphs that have crappy line breaks
+        # are accepted correctly.
+        text = ' '.join(['text'] * 300)
+        text += '\n \n'
+        text += ' '.join(['more'] * 100)
+        issues = bot.collect_formatting_issues(text)
+        self.assertFalse(issues.long_paragraphs)
+
     def test_contains_codeblocks(self):
         '''Test for codeblocks'''
 
