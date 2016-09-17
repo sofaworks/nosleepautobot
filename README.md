@@ -28,7 +28,7 @@ NoxBot performs several moderator tasks automatically that would otherwise be an
 
 * **NoxBot checks for code blocks in posts**
 
-  Generally, code blocks do not belong in NoSleep submissions. They are generally the byproduct of users writing their stories in another software such as Microsoft Word and using `Tab` characters, which translate to `<pre>` and `<code>` blocks in Markdown. This results in unreadable blocks of text in the resulting submission. NoxBot will temporarily remove posts containing such blocks of text and send a private message to the submission author alerting them to fix their formatting and submit their post for reapproval.
+  Generally, code blocks do not belong in NoSleep submissions. They are typically the byproduct of users writing their stories in another software such as Microsoft Word and using `Tab` characters, which translate to `<pre>` and `<code>` blocks in Markdown. This results in unreadable blocks of text in the resulting submission. NoxBot will temporarily remove posts containing such blocks of text and send a private message to the submission author alerting them to fix their formatting and submit their post for reapproval.
 
 * **NoxBot provides information/rule reminders via PM to authors when they post a new part of a series.**
 
@@ -38,15 +38,13 @@ NoxBot performs several moderator tasks automatically that would otherwise be an
 
   If NoxBot detects valid "series" tags in a post title, it will flair the post as a `Series`.
 
-## How does NoxBot run?
-
-NoxBot is scheduled to **run every 3 minutes** (this value can be adjusted). When it runs, it checks the last hour's worth of posts. It also has a caching mechanism in the background that ensures it won't double-count things or do extra work. If the process running NoxBot ever dies, it will automatically restart, so hopefully this will prevent it from being flaky or unresilient.
-
 ## Who takes care of NoxBot live and where does it live?
 
 NoxBot was written by reddit user [`/u/SofaAssassin`](https://np.reddit.com/u/SofaAssassin). It is maintained by `/u/SofaAssassin` and [`/u/Himekat`](https://np.reddit.com/u/Himekat) (a NoSleep mod).
 
 ## NoxBot in Production
+
+NoxBot is scheduled to **run every 2 minutes**. When it runs, it checks the last hour's worth of posts. It also has a caching mechanism in the background that ensures it won't double-count things or do extra work. If the process running NoxBot ever dies, it will automatically restart, so hopefully this will prevent it from being flaky or unresilient.
 
 NoxBot is hosted on and run from **Heroku**, utilizes **Redis** for caching, is continuously deployed via **CircleCI**, and has informational/error logging with **PaperTrail** and **Rollbar**.
 
