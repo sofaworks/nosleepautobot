@@ -1,4 +1,11 @@
-## NoxBot [![CircleCI Production branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production)
+## NoxBot
+
+## Build Status
+
+| Branch | Status |
+|--------|--------|
+| `production` | [![CircleCI Production branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production) |
+| `master` | [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master) |
 
 ## What is NoxBot?
 
@@ -14,6 +21,15 @@ NoxBot performs several moderator tasks automatically that would otherwise be an
 * **NoxBot performs checks for NoSleep's title tags rules.**
 
   NoSleep has strict rules about what sorts of "tags" (things in braces/brackets) can be used in the titles of posts. In short, the only thing allowed in title tags is the part of the story if the story is a series (ex. [Part 1]). NoxBot checks each post for tags and uses a complex regex to determine if the tags are valid or not. If the tags are *not* valid, it removes the post from NoSleep and makes a comment on the post telling the user what happened and informing them of the rule.
+
+* **NoxBot checks for long paragraphs in posts**
+
+  User submissions that contain paragraphs considered 'exceedingly long' (in this case, meaning the submission has a paragraph containing over 350 words) are flagged and temporarily removed. A private message is sent to the author alerting them to update their formatting and submit their post for reapproval.
+
+* **NoxBot checks for code blocks in posts**
+
+  Generally, code blocks do not belong in NoSleep submissions. They are generally the byproduct of users writing their stories in another software such as Microsoft Word and using `Tab` characters, which translate to `<pre>` and `<code>` blocks in Markdown. This results in unreadable blocks of text in the resulting submission. NoxBot will temporarily remove posts containing such blocks of text and send a private message to the submission author alerting them to fix their formatting and submit their post for reapproval.
+
 * **NoxBot provides information/rule reminders via PM to authors when they post a new part of a series.**
 
   If NoxBot detects valid "series" tags in a post title, it will PM the author of the story (via the /r/NoSleepAutoBot user itself) and remind them that they should double-check the flair on their post, and link back to previous parts of the story. This is not a reprimand in any way -- rather, it is a friendly reminder for series posts.
@@ -30,7 +46,9 @@ NoxBot is scheduled to **run every 3 minutes** (this value can be adjusted). Whe
 
 NoxBot was written by reddit user [`/u/SofaAssassin`](https://np.reddit.com/u/SofaAssassin). It is maintained by `/u/SofaAssassin` and [`/u/Himekat`](https://np.reddit.com/u/Himekat) (a NoSleep mod).
 
-NoxBot itself is hosted on and run from **Heroku**, utilizes **Redis** for caching, is continuously deployed via **CircleCI**, and has informational/error logging with **PaperTrail** and **Rollbar**.
+## NoxBot in Production
+
+NoxBot is hosted on and run from **Heroku**, utilizes **Redis** for caching, is continuously deployed via **CircleCI**, and has informational/error logging with **PaperTrail** and **Rollbar**.
 
 ## What if I have problems or new feature ideas?
 
