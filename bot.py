@@ -59,6 +59,14 @@ class AutoBotSubmission(AutoBotBaseModel):
     def set_ttl(cls, submission, ttl=86400):
         submission.to_hash().expire(ttl=ttl)
 
+    def set_index_ttls(self, ttl=86400):
+        '''Kind of a hacky way to get index keys to expire since they
+        are normally created without any TTL whatsoever.'''
+        for mi in self._indexes:
+            for index in mi.get_indexes():
+                key = index.get_key(index.field_value(self)).key
+                self.database.expire(key, ttl)
+
 
 FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
 
@@ -432,6 +440,8 @@ class AutoBot(object):
                 # Save for double the TTL in case Reddit's API returns things out
                 # of the search date range
                 AutoBotSubmission.set_ttl(obj, cache_ttl)
+                obj.set_index_ttls(cache_ttl)
+
 
 
     def run(self, forever=False, interval=300):
