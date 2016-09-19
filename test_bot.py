@@ -1,8 +1,22 @@
 import unittest
+from urlparse import urlparse, parse_qs
 
 import bot
 
 class TestBotMethods(unittest.TestCase):
+
+    def test_generate_modmail_link(self):
+        modlink = bot.generate_modmail_link('testsr', 'blahblah')
+        parsed_url = urlparse(modlink)
+
+        query = parse_qs(parsed_url.query)
+
+        # make sure there are to/subject/message qs components
+        self.assertEqual(parsed_url.path, '/message/compose')
+        self.assertTrue('to' in query)
+        self.assertTrue('message' in query)
+        self.assertTrue('subject' in query)
+
 
     def test_reject_long_paragraphs(self):
         '''This test asserts that paragraphs > (length) words are rejected.'''
