@@ -481,9 +481,7 @@ class AutoBot(object):
             logging.info("Sleeping for {0} seconds until next run.".format(sleep_interval))
             time.sleep(sleep_interval)
 
-
-if __name__ == '__main__':
-
+def transform_and_roll_out():
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
     parser = create_argparser()
@@ -509,3 +507,6 @@ if __name__ == '__main__':
 
     bot = AutoBot(configuration)
     bot.run(args.forever, args.interval)
+
+if __name__ == '__main__':
+    transform_and_roll_out()
