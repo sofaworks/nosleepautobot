@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-from string import Template
 from collections import namedtuple
+from string import Template
 import ConfigParser
 import itertools
 import urlparse
 import datetime
 import argparse
 import logging
+import urllib
 import signal
 import time
 import sys
@@ -120,7 +121,7 @@ CODEBLOCK_MESSAGE = ('\n\n* **Paragraph with 4 (or more) Starting Spaces Detecte
                      'of paragraphs/lines. You can create paragraphs by pressing `Enter` twice at the end '
                      'of a line if you haven\'t already done so.')
 
-FORMATTING_CLOSE = ('\n\nOnce you have fixed your formatting issues, please respond to this PM for re-approval. '
+FORMATTING_CLOSE = Template('\n\n**Once you have fixed your formatting issues, please [click here](${modmail_link}) to request reapproval.** '
                     'The re-approval process is manual, so send a single request only. Multiple requests '
                     'do not mean faster approval; in fact they will clog the modqueue and result in '
                     're-approvals taking even more time.')
@@ -131,6 +132,21 @@ def create_argparser():
     parser.add_argument('--forever', required=False, action='store_true', help='If specified, runs bot forever.')
     parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
     return parser
+
+def generate_modmail_link(subreddit, post_url):
+    base_url = 'https://www.reddit.com/message/compose?'
+    query = {
+                'to': '/r/{0}'.format(subreddit),
+                'subject': 'Please reapprove submission',
+                'message': ('[My post]({0}) to /r/NoSleep was flagged for '
+                            'formatting issues. I have fixed those issues and '
+                            'am now requesting re-approval.'
+                            '\n\nNote to moderation team: if this story is '
+                            'eligible for re-approval, remember to remove '
+                            'the bot\'s comment from it.'.format(post_url))
+            }
+    urllib.urlencode(query)
+    return base_url + urllib.urlencode(query)
 
 def categorize_tags(title):
     """Parses tags out of the post title
@@ -362,13 +378,14 @@ class AutoBot(object):
                     final_message.append(CODEBLOCK_MESSAGE)
         else:
             if any(formatting_issues):
+                modmail_link = generate_modmail_link(self.subreddit.display_name, post.shortlink)
                 final_message.append(TEMPORARY_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
 
                 if formatting_issues.long_paragraphs:
                     final_message.append(LONG_PARAGRAPH_MESSAGE)
                 if formatting_issues.has_codeblocks:
                     final_message.append(CODEBLOCK_MESSAGE)
-                final_message.append(FORMATTING_CLOSE)
+                final_message.append(FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
 
         return ''.join(final_message)
 
@@ -414,7 +431,7 @@ class AutoBot(object):
                 elif any(formatting_issues):
                     logging.info("Formatting issues found.")
                     message = self.prepare_delete_message(s, formatting_issues, False)
-                    s.author.message("Please correct formatting issues in your r/nosleep post", message, self.subreddit)
+                    self.moderator.distinguish(s.reply(message))
                     self.moderator.remove(s)
                     obj.deleted = True
                 elif post_tags['valid_tags']:
