@@ -138,7 +138,7 @@ def generate_modmail_link(subreddit, post_url):
     query = {
                 'to': '/r/{0}'.format(subreddit),
                 'subject': 'Please reapprove submission',
-                'message': ('[My post]({0}) to /r/NoSleep was flagged for '
+                'message': ('[My post]({0}) to /r/NoSleep was removed for '
                             'formatting issues. I have fixed those issues and '
                             'am now requesting re-approval.'
                             '\n\nNote to moderation team: if this story is '
