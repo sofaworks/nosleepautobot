@@ -47,10 +47,21 @@ class TestBotMethods(unittest.TestCase):
         self.assertFalse(issues.long_paragraphs)
 
     def test_contains_codeblocks(self):
-        '''Test for codeblocks'''
+        '''Test for codeblocks in a message'''
 
         text = '    This starts with four spaces'
         self.assertTrue(bot.contains_codeblocks([text]))
+
+        tab_text = '\tThis starts with a tab'
+        self.assertTrue(bot.contains_codeblocks([tab_text]))
+
+        varied_spaces = '   \tThis has three spaces and a tab'
+        self.assertTrue(bot.contains_codeblocks([varied_spaces]))
+
+        blank_line_with_spaces = ''.join([' '] * 8)
+        self.assertFalse(bot.contains_codeblocks([blank_line_with_spaces]))
+
+        self.assertFalse(bot.contains_codeblocks(['']))
 
     def test_categorize_tags(self):
         title = 'This is a sample post (volume 1) {part 2}'
