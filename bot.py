@@ -115,9 +115,9 @@ LONG_PARAGRAPH_MESSAGE= ('* **Long Paragraphs Detected**\n\n'
                          'by pressing `Enter` twice at the end of a line.')
 
 CODEBLOCK_MESSAGE = ('\n\n* **Paragraph with 4 (or more) Starting Spaces Detected**\n\n'
-                     '  You have one or more paragraphs beginning with four or more spaces.\n\n'
-                     '  On Reddit, lines beginning with four or more spaces are treated as '
-                     'blocks of code and make your story unreadable. Please remove spaces at the beginning '
+                     '  You have one or more paragraphs beginning with a tab or four or more spaces.\n\n'
+                     '  On Reddit, lines beginning with a tab or four or more spaces are treated as '
+                     'blocks of code and make your story unreadable. Please remove tabs or spaces at the beginning '
                      'of paragraphs/lines. You can create paragraphs by pressing `Enter` twice at the end '
                      'of a line if you haven\'t already done so.')
 
@@ -194,7 +194,10 @@ def paragraphs_too_long(paragraphs, max_word_count=350):
 
 def contains_codeblocks(paragraphs):
     for p in paragraphs:
-        if p.startswith('    '):
+        # this determines if the line is not just all whitespace and then
+        # whether or not it contains the 4 spaces or tab characters, which
+        # will trigger markdown <code> blocks
+        if p.strip() and (p.startswith('    ') or p.lstrip(' ').startswith('\t')):
             return True
     return False
 
