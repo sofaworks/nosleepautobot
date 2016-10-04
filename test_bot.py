@@ -6,7 +6,7 @@ import bot
 class TestBotMethods(unittest.TestCase):
 
     def test_generate_modmail_link(self):
-        modlink = bot.generate_modmail_link('testsr', 'blahblah')
+        modlink = bot.generate_modmail_link('testsr', 'some title', 'some body')
         parsed_url = urlparse(modlink)
 
         query = parse_qs(parsed_url.query)
@@ -16,6 +16,21 @@ class TestBotMethods(unittest.TestCase):
         self.assertTrue('to' in query)
         self.assertTrue('message' in query)
         self.assertTrue('subject' in query)
+        self.assertEqual(query['message'][0], 'some body')
+        self.assertEqual(query['subject'][0], 'some title')
+
+    def test_generate_empty_modmail_link(self):
+        modlink = bot.generate_modmail_link('testsr')
+        parsed_url = urlparse(modlink)
+        query = parse_qs(parsed_url.query)
+
+        self.assertFalse('message' in query)
+        self.assertFalse('subject' in query)
+
+    def test_generate_reapproval_message(self):
+        msg = bot.generate_reapproval_message('http://localhost/mail')
+
+        self.assertTrue(msg.startswith('[My post](http://localhost/mail)'))
 
 
     def test_reject_long_paragraphs(self):

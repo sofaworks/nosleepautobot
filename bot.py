@@ -126,6 +126,11 @@ FORMATTING_CLOSE = Template('\n\n**Once you have fixed your formatting issues, p
                     'do not mean faster approval; in fact they will clog the modqueue and result in '
                     're-approvals taking even more time.')
 
+BOT_DESCRIPTION = Template('\n\n_I am a bot, and this was automatically posted. '
+                    'Do not reply to me as messages will be ignored. '
+                    'Please [contact the moderators of this subreddit](${subreddit_mail_uri} '
+                    'if you have any questions, concerns, or bugs to report._')
+
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
     parser.add_argument('-c', '--conf', required=False, type=str, help='Configuration file to use for the bot')
@@ -133,18 +138,26 @@ def create_argparser():
     parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
     return parser
 
-def generate_modmail_link(subreddit, post_url):
+def generate_reapproval_message(post_url):
+    return ('[My post]({0}) to /r/NoSleep was removed for '
+            'formatting issues. I have fixed those issues and '
+            'am now requesting re-approval.'
+            '\n\n_Note to moderation team: if this story is '
+            'eligible for re-approval, remember to remove '
+            'the bot\'s comment from it._'.format(post_url))
+
+def generate_modmail_link(subreddit, subject=None, message=None):
     base_url = 'https://www.reddit.com/message/compose?'
     query = {
                 'to': '/r/{0}'.format(subreddit),
-                'subject': 'Please reapprove submission',
-                'message': ('[My post]({0}) to /r/NoSleep was removed for '
-                            'formatting issues. I have fixed those issues and '
-                            'am now requesting re-approval.'
-                            '\n\nNote to moderation team: if this story is '
-                            'eligible for re-approval, remember to remove '
-                            'the bot\'s comment from it.'.format(post_url))
             }
+
+    if subject:
+        query['subject'] = subject
+
+    if message:
+        query['message'] = message
+
     urllib.urlencode(query)
     return base_url + urllib.urlencode(query)
 
@@ -381,7 +394,10 @@ class AutoBot(object):
                     final_message.append(CODEBLOCK_MESSAGE)
         else:
             if any(formatting_issues):
-                modmail_link = generate_modmail_link(self.subreddit.display_name, post.shortlink)
+                modmail_link = generate_modmail_link(self.subreddit.display_name,
+                                                     'Please reapprove submission',
+                                                     generate_reapproval_message(post.shortlink))
+
                 final_message.append(TEMPORARY_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
 
                 if formatting_issues.long_paragraphs:
@@ -389,6 +405,9 @@ class AutoBot(object):
                 if formatting_issues.has_codeblocks:
                     final_message.append(CODEBLOCK_MESSAGE)
                 final_message.append(FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
+
+        final_message.append(BOT_DESCRIPTION.safe_substitute(
+            subreddit_mail_url=generate_modmail_link(self.subreddit.display_name)))
 
         return ''.join(final_message)
 
