@@ -49,6 +49,13 @@ class TestBotMethods(unittest.TestCase):
         add_text += '& -- text'
         self.assertFalse(bot.paragraphs_too_long([add_text]))
 
+    def test_live_story_paragraphs(self):
+        # Soul Cancer initiated issue #13
+        with open('tests/soul_cancer.md', 'r') as sc:
+            story = sc.read()
+            issues = bot.collect_formatting_issues(story)
+            self.assertFalse(issues.long_paragraphs)
+
 
     def test_reject_long_paragraphs_funky_newlines(self):
         '''Test edge case long paragraphs (newlines)'''
