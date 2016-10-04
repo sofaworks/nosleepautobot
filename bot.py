@@ -216,7 +216,10 @@ def contains_codeblocks(paragraphs):
 
 def collect_formatting_issues(post_body):
     # split the post body by paragraphs
-    paragraphs = re.split(r'\n\s*\n', post_body)
+    # Things that are considered 'paragraphs' are:
+    # * A newline followed by some arbitrary number of spaces followed by a newline
+    # * At least two instances of whitespace followed by a newline
+    paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n)', post_body)
     return FormattingIssues(
             paragraphs_too_long(paragraphs),
             contains_codeblocks(paragraphs))
