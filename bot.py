@@ -128,7 +128,7 @@ FORMATTING_CLOSE = Template('\n\n**Once you have fixed your formatting issues, p
 
 BOT_DESCRIPTION = Template('\n\n_I am a bot, and this was automatically posted. '
                     'Do not reply to me as messages will be ignored. '
-                    'Please [contact the moderators of this subreddit](${subreddit_mail_uri} '
+                    'Please [contact the moderators of this subreddit](${subreddit_mail_uri}) '
                     'if you have any questions, concerns, or bugs to report._')
 
 def create_argparser():
@@ -365,7 +365,10 @@ class AutoBot(object):
 
         time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
 
-        fmt_msg = POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_to_next_post))
+        components = [POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_to_next_post)),
+                      BOT_DESCRIPTION.safe_substitute(subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name))]
+
+        fmt_msg = ''.join(components)
 
         self.moderator.distinguish(submission.reply(fmt_msg))
         self.moderator.remove(submission)
