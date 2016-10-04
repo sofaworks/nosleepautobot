@@ -407,7 +407,7 @@ class AutoBot(object):
                 final_message.append(FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
 
         final_message.append(BOT_DESCRIPTION.safe_substitute(
-            subreddit_mail_url=generate_modmail_link(self.subreddit.display_name)))
+            subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name)))
 
         return ''.join(final_message)
 
