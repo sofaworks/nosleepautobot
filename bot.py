@@ -481,7 +481,7 @@ class AutoBot(object):
 
                 if post_tags['invalid_tags'] or any(formatting_issues):
                     # We have bad tags! Delete post and send PM.
-                    if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invald_tags']))
+                    if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
                     if any(formatting_issues): logging.info("Formatting issues found")
                     message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'])
                     self.moderator.distinguish(s.reply(message))
