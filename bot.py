@@ -101,7 +101,7 @@ NSFW_TITLE_MESSAGE = ('\n\n* **Title contains "NSFW"**\n\n'
                       'can be marked **NSFW** after they are posted by click **NSFW** or **Add Trigger Warning** '
                       '(depending on your UI) at the bottom of the post.')
 
-REPOST_MESSAGE = '**\n\nSince titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
+REPOST_MESSAGE = '\n\n**Since titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
 
 ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following issues have been detected in your post, '
                                  'which either violate rules or may make your post unreadable.'
@@ -421,7 +421,7 @@ class AutoBot(object):
             if invalid_tags: final_message.append(DISALLOWED_TAGS_MESSAGE)
             if formatting_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
             final_message.append(REPOST_MESSAGE)
-            if any(formatting_issues):
+            if any(formatting_issues) and not formatting_issues.title_contains_nsfw:
                 final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
 
                 if formatting_issues.long_paragraphs:
