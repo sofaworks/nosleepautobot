@@ -69,7 +69,7 @@ class AutoBotSubmission(AutoBotBaseModel):
                 self.database.expire(key, ttl)
 
 
-FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
+FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks', 'title_contains_nsfw'])
 
 
 POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
@@ -82,23 +82,30 @@ POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per
                       )
 
 PERMANENT_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
-                                    'for violating the following rules:\n\n')
+                                    'for violating the following rules:')
 
 TEMPORARY_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been **temporarily** '
                                     'removed from /r/nosleep due to the following formatting issues '
-                                    'detected in your post:\n\n')
+                                    'detected in your post:')
 
-DISALLOWED_TAGS_MESSAGE = ('* **Invalid Tags**'
+DISALLOWED_TAGS_MESSAGE = ('\n\n* **Invalid Tags**\n\n'
                            '  /r/nosleep has strict rules about tags in story titles:\n\n'
                            '  **Tags (example: [True], [real experience]) are not allowed.** '
                            'The only thing in brackets **[]**, **{}** or parenthesis **()** '
                            'should be a reference to which "part" of your series the post is. '
-                           '**Example**: (part 1) or [Pt2].\n\n')
+                           '**Example**: (part 1) or [Pt2].')
 
-REPOST_MESSAGE = '**Since titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
+NSFW_TITLE_MESSAGE = ('\n\n* **Title contains "NSFW"**\n\n'
+                      '  Your post title appears to include **NSFW** in the title. /r/nosleep '
+                      'does not allow **NSFW** to be stated in the title of stories. Stories '
+                      'can be marked **NSFW** after they are posted by click **NSFW** or **Add Trigger Warning** '
+                      '(depending on your UI) at the bottom of the post.')
 
-ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following formatting issues have been detected in your post, '
-                                 'which may make your post unreadable. Please correct them when re-posting your story.\n\n')
+REPOST_MESSAGE = '**\n\nSince titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
+
+ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following issues have been detected in your post, '
+                                 'which either violate rules or may make your post unreadable.'
+                                 ' Please correct them when re-posting your story.')
 
 
 SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep series! '
@@ -109,7 +116,7 @@ SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep
                   'and look underneath the post itself. Click on the **flair** button '
                   'to bring up a list of options. Choose the "series" option and hit "save"!')
 
-LONG_PARAGRAPH_MESSAGE= ('* **Long Paragraphs Detected**\n\n'
+LONG_PARAGRAPH_MESSAGE= ('\n\n* **Long Paragraphs Detected**\n\n'
                          '  You have one or more paragraphs containing more than 350 words. '
                          'Please break up your story into smaller paragraphs. You can create paragraphs '
                          'by pressing `Enter` twice at the end of a line.')
@@ -131,12 +138,15 @@ BOT_DESCRIPTION = Template('\n\n_I am a bot, and this was automatically posted. 
                     'Please [contact the moderators of this subreddit](${subreddit_mail_uri}) '
                     'if you have any questions, concerns, or bugs to report._')
 
+
+
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
     parser.add_argument('-c', '--conf', required=False, type=str, help='Configuration file to use for the bot')
     parser.add_argument('--forever', required=False, action='store_true', help='If specified, runs bot forever.')
     parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
     return parser
+
 
 def generate_reapproval_message(post_url):
     return ('[My post]({0}) to /r/NoSleep was removed for '
@@ -145,6 +155,7 @@ def generate_reapproval_message(post_url):
             '\n\n_Note to moderation team: if this story is '
             'eligible for re-approval, remember to remove '
             'the bot\'s comment from it._'.format(post_url))
+
 
 def generate_modmail_link(subreddit, subject=None, message=None):
     base_url = 'https://www.reddit.com/message/compose?'
@@ -160,6 +171,13 @@ def generate_modmail_link(subreddit, subject=None, message=None):
 
     urllib.urlencode(query)
     return base_url + urllib.urlencode(query)
+
+
+def check_valid_title(title):
+    """Checks if the title contains valid content"""
+    title_issues = TitleIssues(contains_nsfw=True if ' nsfw ' in title.lower() else False)
+    return title_issues
+
 
 def categorize_tags(title):
     """Parses tags out of the post title
@@ -199,11 +217,18 @@ def englishify_time(seconds):
 
     return '{0} hours, {1} minutes, {2} seconds'.format(int(hours), int(minutes), int(seconds))
 
+
 def paragraphs_too_long(paragraphs, max_word_count=350):
     for p in paragraphs:
         if max_word_count < len(re.findall(r'\w+', p)):
             return True
     return False
+
+
+def title_contains_nsfw(title):
+    if not title: return False
+    return any('nsfw' == x.strip() for x in title.lower().split(' '))
+
 
 def contains_codeblocks(paragraphs):
     for p in paragraphs:
@@ -214,7 +239,8 @@ def contains_codeblocks(paragraphs):
             return True
     return False
 
-def collect_formatting_issues(post_body):
+
+def collect_formatting_issues(title, post_body):
     # split the post body by paragraphs
     # Things that are considered 'paragraphs' are:
     # * A newline followed by some arbitrary number of spaces followed by a newline
@@ -222,7 +248,8 @@ def collect_formatting_issues(post_body):
     paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n)', post_body)
     return FormattingIssues(
             paragraphs_too_long(paragraphs),
-            contains_codeblocks(paragraphs))
+            contains_codeblocks(paragraphs),
+            title_contains_nsfw(title))
 
 
 def get_bot_defaults():
@@ -250,6 +277,7 @@ def parse_config(conf):
             REDIS_URL: config.get('autobot', 'redis_url'),
             REDIS_PORT: config.getint('autobot', 'redis_port')
         }
+
 
 def get_environment_configuration():
     """Gets configurations specified in environment variables"""
@@ -287,6 +315,7 @@ def get_environment_configuration():
 
     # remove all the 'None' valued things
     return {k: v for k, v in override.items() if v is not None}
+
 
 class AutoBot(object):
     def __init__(self, configuration):
@@ -387,9 +416,10 @@ class AutoBot(object):
 
     def prepare_delete_message(self, post, formatting_issues, invalid_tags):
         final_message = []
-        if invalid_tags:
+        if invalid_tags or formatting_issues.title_contains_nsfw:
             final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
-            final_message.append(DISALLOWED_TAGS_MESSAGE)
+            if invalid_tags: final_message.append(DISALLOWED_TAGS_MESSAGE)
+            if formatting_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
             final_message.append(REPOST_MESSAGE)
             if any(formatting_issues):
                 final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
@@ -445,20 +475,15 @@ class AutoBot(object):
                 obj.deleted = True
             else:
                 # Here we want all the formatting and tag issues
-                formatting_issues = collect_formatting_issues(s.selftext)
+                formatting_issues = collect_formatting_issues(s.title, s.selftext)
 
                 post_tags = categorize_tags(s.title)
 
-                if post_tags['invalid_tags']:
+                if post_tags['invalid_tags'] or any(formatting_issues):
                     # We have bad tags! Delete post and send PM.
-                    logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                    message = self.prepare_delete_message(s, formatting_issues, True)
-                    self.moderator.distinguish(s.reply(message))
-                    self.moderator.remove(s)
-                    obj.deleted = True
-                elif any(formatting_issues):
-                    logging.info("Formatting issues found.")
-                    message = self.prepare_delete_message(s, formatting_issues, False)
+                    if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invald_tags']))
+                    if any(formatting_issues): logging.info("Formatting issues found")
+                    message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'])
                     self.moderator.distinguish(s.reply(message))
                     self.moderator.remove(s)
                     obj.deleted = True
@@ -509,6 +534,7 @@ class AutoBot(object):
             logging.info("Sleeping for {0} seconds until next run.".format(sleep_interval))
             time.sleep(sleep_interval)
 
+
 def transform_and_roll_out():
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
@@ -535,6 +561,7 @@ def transform_and_roll_out():
 
     bot = AutoBot(configuration)
     bot.run(args.forever, args.interval)
+
 
 if __name__ == '__main__':
     transform_and_roll_out()
