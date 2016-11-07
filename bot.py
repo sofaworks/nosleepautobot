@@ -69,7 +69,8 @@ class AutoBotSubmission(AutoBotBaseModel):
                 self.database.expire(key, ttl)
 
 
-FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks', 'title_contains_nsfw'])
+FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
+TitleIssues = namedtuple('TitleIssues', ['title_contains_nsfw'])
 
 
 POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
@@ -175,7 +176,7 @@ def generate_modmail_link(subreddit, subject=None, message=None):
 
 def check_valid_title(title):
     """Checks if the title contains valid content"""
-    title_issues = TitleIssues(contains_nsfw=True if ' nsfw ' in title.lower() else False)
+    title_issues = TitleIssues(title_contains_nsfw=title_contains_nsfw(title))
     return title_issues
 
 
@@ -240,7 +241,7 @@ def contains_codeblocks(paragraphs):
     return False
 
 
-def collect_formatting_issues(title, post_body):
+def collect_formatting_issues(post_body):
     # split the post body by paragraphs
     # Things that are considered 'paragraphs' are:
     # * A newline followed by some arbitrary number of spaces followed by a newline
@@ -248,8 +249,7 @@ def collect_formatting_issues(title, post_body):
     paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n)', post_body)
     return FormattingIssues(
             paragraphs_too_long(paragraphs),
-            contains_codeblocks(paragraphs),
-            title_contains_nsfw(title))
+            contains_codeblocks(paragraphs))
 
 
 def get_bot_defaults():
@@ -414,14 +414,14 @@ class AutoBot(object):
                     raise
         raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
 
-    def prepare_delete_message(self, post, formatting_issues, invalid_tags):
+    def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
         final_message = []
-        if invalid_tags or formatting_issues.title_contains_nsfw:
+        if invalid_tags or title_issues:
             final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
             if invalid_tags: final_message.append(DISALLOWED_TAGS_MESSAGE)
-            if formatting_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
+            if title_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
             final_message.append(REPOST_MESSAGE)
-            if any(formatting_issues) and not formatting_issues.title_contains_nsfw:
+            if any(formatting_issues):
                 final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
 
                 if formatting_issues.long_paragraphs:
@@ -475,15 +475,15 @@ class AutoBot(object):
                 obj.deleted = True
             else:
                 # Here we want all the formatting and tag issues
-                formatting_issues = collect_formatting_issues(s.title, s.selftext)
-
+                formatting_issues = collect_formatting_issues(s.selftext)
+                title_issues = check_valid_title(s.title)
                 post_tags = categorize_tags(s.title)
 
-                if post_tags['invalid_tags'] or any(formatting_issues):
-                    # We have bad tags! Delete post and send PM.
+                if post_tags['invalid_tags'] or any(title_issues):
+                    # We have bad tags or a bad title! Delete post and send PM.
                     if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                    if any(formatting_issues): logging.info("Formatting issues found")
-                    message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'])
+                    if any(title_issues): logging.info("Title issues found")
+                    message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'], title_issues)
                     self.moderator.distinguish(s.reply(message))
                     self.moderator.remove(s)
                     obj.deleted = True

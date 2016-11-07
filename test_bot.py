@@ -61,7 +61,7 @@ class TestBotMethods(unittest.TestCase):
         # Soul Cancer initiated issue #13
         with open('tests/soul_cancer.md', 'r') as sc:
             story = sc.read()
-            issues = bot.collect_formatting_issues(None, story)
+            issues = bot.collect_formatting_issues( story)
             self.assertFalse(issues.long_paragraphs)
 
 
@@ -73,7 +73,7 @@ class TestBotMethods(unittest.TestCase):
         text = ' '.join(['text'] * 300)
         text += '\n \n'
         text += ' '.join(['more'] * 100)
-        issues = bot.collect_formatting_issues(None, text)
+        issues = bot.collect_formatting_issues(text)
         self.assertFalse(issues.long_paragraphs)
 
     def test_contains_codeblocks(self):
