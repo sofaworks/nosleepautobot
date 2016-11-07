@@ -32,6 +32,14 @@ class TestBotMethods(unittest.TestCase):
 
         self.assertTrue(msg.startswith('[My post](http://localhost/mail)'))
 
+    def test_reject_nsfw_in_title(self):
+        '''Test that the presence of 'nsfw' in titles is a rejection'''
+        self.assertTrue(bot.title_contains_nsfw('blah blah nsfw blah'))
+        self.assertFalse(bot.title_contains_nsfw('NsFw_title_with_spaces'))
+        self.assertTrue(bot.title_contains_nsfw('nsfw leading title'))
+        self.assertTrue(bot.title_contains_nsfw('Title ending with NSFW'))
+        self.assertFalse(bot.title_contains_nsfw('Title that does not contain bad words'))
+
 
     def test_reject_long_paragraphs(self):
         '''This test asserts that paragraphs > (length) words are rejected.'''
@@ -53,7 +61,7 @@ class TestBotMethods(unittest.TestCase):
         # Soul Cancer initiated issue #13
         with open('tests/soul_cancer.md', 'r') as sc:
             story = sc.read()
-            issues = bot.collect_formatting_issues(story)
+            issues = bot.collect_formatting_issues(None, story)
             self.assertFalse(issues.long_paragraphs)
 
 
@@ -65,7 +73,7 @@ class TestBotMethods(unittest.TestCase):
         text = ' '.join(['text'] * 300)
         text += '\n \n'
         text += ' '.join(['more'] * 100)
-        issues = bot.collect_formatting_issues(text)
+        issues = bot.collect_formatting_issues(None, text)
         self.assertFalse(issues.long_paragraphs)
 
     def test_contains_codeblocks(self):
@@ -116,3 +124,4 @@ class TestBotMethods(unittest.TestCase):
         import os
         os.environ.clear()
         self.assertFalse(bool(bot.get_environment_configuration()))
+
