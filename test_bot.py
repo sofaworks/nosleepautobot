@@ -39,6 +39,9 @@ class TestBotMethods(unittest.TestCase):
         self.assertTrue(bot.title_contains_nsfw('nsfw leading title'))
         self.assertTrue(bot.title_contains_nsfw('Title ending with NSFW'))
         self.assertFalse(bot.title_contains_nsfw('Title that does not contain bad words'))
+        self.assertTrue(bot.title_contains_nsfw('Title with an [NSFW] tag'))
+        self.assertTrue(bot.title_contains_nsfw('!NSFW!'))
+        self.assertTrue(bot.title_contains_nsfw('Is this post NSFW?'))
 
 
     def test_reject_long_paragraphs(self):
