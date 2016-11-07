@@ -10,6 +10,7 @@ import argparse
 import logging
 import urllib
 import signal
+import string
 import time
 import sys
 import os
@@ -228,7 +229,9 @@ def paragraphs_too_long(paragraphs, max_word_count=350):
 
 def title_contains_nsfw(title):
     if not title: return False
-    return any('nsfw' == x.strip() for x in title.lower().split(' '))
+    exclude = '{}[]().!?$*@#'
+    parts = title.lower().translate(string.maketrans(exclude, ' ' * len(exclude))).split(' ')
+    return any('nsfw' == x.strip() for x in parts)
 
 
 def contains_codeblocks(paragraphs):
