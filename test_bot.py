@@ -34,14 +34,15 @@ class TestBotMethods(unittest.TestCase):
 
     def test_reject_nsfw_in_title(self):
         '''Test that the presence of 'nsfw' in titles is a rejection'''
-        self.assertTrue(bot.title_contains_nsfw('blah blah nsfw blah'))
-        self.assertFalse(bot.title_contains_nsfw('NsFw_title_with_spaces'))
-        self.assertTrue(bot.title_contains_nsfw('nsfw leading title'))
-        self.assertTrue(bot.title_contains_nsfw('Title ending with NSFW'))
-        self.assertFalse(bot.title_contains_nsfw('Title that does not contain bad words'))
-        self.assertTrue(bot.title_contains_nsfw('Title with an [NSFW] tag'))
-        self.assertTrue(bot.title_contains_nsfw('!NSFW!'))
-        self.assertTrue(bot.title_contains_nsfw('Is this post NSFW?'))
+        self.assertTrue(bot.title_contains_nsfw(u'blah blah nsfw blah'))
+        self.assertFalse(bot.title_contains_nsfw(u'NsFw_title_with_spaces'))
+        self.assertTrue(bot.title_contains_nsfw(u'nsfw leading title'))
+        self.assertTrue(bot.title_contains_nsfw(u'Title ending with NSFW'))
+        self.assertFalse(bot.title_contains_nsfw(u'Title that does not contain bad words'))
+        self.assertTrue(bot.title_contains_nsfw(u'Title with an [NSFW] tag'))
+        self.assertTrue(bot.title_contains_nsfw(u'!NSFW!'))
+        self.assertTrue(bot.title_contains_nsfw(u'Is this post NSFW?'))
+        self.assertTrue(bot.title_contains_nsfw(u'Hi [Part 2] [NSFW]'))
 
 
     def test_reject_long_paragraphs(self):

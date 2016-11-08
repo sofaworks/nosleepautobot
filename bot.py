@@ -229,8 +229,9 @@ def paragraphs_too_long(paragraphs, max_word_count=350):
 
 def title_contains_nsfw(title):
     if not title: return False
-    exclude = '{}[]().!?$*@#'
-    parts = title.lower().translate(string.maketrans(exclude, ' ' * len(exclude))).split(' ')
+    remap_chars = u'{}[]().!?$*@#'
+    exclude_map = {ord(c) : ord(t) for c, t in zip(remap_chars, u' ' * len(remap_chars))}
+    parts = title.lower().translate(exclude_map).split(' ')
     return any('nsfw' == x.strip() for x in parts)
 
 
