@@ -420,7 +420,7 @@ class AutoBot(object):
 
     def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
         final_message = []
-        if invalid_tags or title_issues:
+        if invalid_tags or any(title_issues):
             final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
             if invalid_tags: final_message.append(DISALLOWED_TAGS_MESSAGE)
             if title_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
@@ -483,7 +483,7 @@ class AutoBot(object):
                 title_issues = check_valid_title(s.title)
                 post_tags = categorize_tags(s.title)
 
-                if post_tags['invalid_tags'] or any(title_issues):
+                if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
                     # We have bad tags or a bad title! Delete post and send PM.
                     if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
                     if any(title_issues): logging.info("Title issues found")
