@@ -65,8 +65,16 @@ class TestBotMethods(unittest.TestCase):
         # Soul Cancer initiated issue #13
         with open('tests/soul_cancer.md', 'r') as sc:
             story = sc.read()
-            issues = bot.collect_formatting_issues( story)
+            issues = bot.collect_formatting_issues(story)
             self.assertFalse(issues.long_paragraphs)
+
+
+    def test_chezecaek_full_story(self):
+        # Chezecaek initiated issue #17
+        with open('tests/chezecaek.md', 'r') as sc:
+            story = sc.read()
+            issues = bot.collect_formatting_issues(story)
+            self.assertFalse(issues.has_codeblocks)
 
 
     def test_reject_long_paragraphs_funky_newlines(self):
@@ -79,6 +87,7 @@ class TestBotMethods(unittest.TestCase):
         text += ' '.join(['more'] * 100)
         issues = bot.collect_formatting_issues(text)
         self.assertFalse(issues.long_paragraphs)
+
 
     def test_contains_codeblocks(self):
         '''Test for codeblocks in a message'''
@@ -96,6 +105,7 @@ class TestBotMethods(unittest.TestCase):
         self.assertFalse(bot.contains_codeblocks([blank_line_with_spaces]))
 
         self.assertFalse(bot.contains_codeblocks(['']))
+
 
     def test_categorize_tags(self):
         title = 'This is a sample post (volume 1) {part 2}'
