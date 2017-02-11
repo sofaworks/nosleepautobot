@@ -236,7 +236,7 @@ def title_contains_nsfw(title):
 
 
 def contains_codeblocks(paragraphs):
-    for p in paragraphs:
+    for idx, p in enumerate(paragraphs):
         # this determines if the line is not just all whitespace and then
         # whether or not it contains the 4 spaces or tab characters, which
         # will trigger markdown <code> blocks
@@ -250,7 +250,7 @@ def collect_formatting_issues(post_body):
     # Things that are considered 'paragraphs' are:
     # * A newline followed by some arbitrary number of spaces followed by a newline
     # * At least two instances of whitespace followed by a newline
-    paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n)', post_body)
+    paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n|\t\n)', post_body)
     return FormattingIssues(
             paragraphs_too_long(paragraphs),
             contains_codeblocks(paragraphs))
