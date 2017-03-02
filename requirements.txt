@@ -1,10 +1,13 @@
+appdirs==1.4.0
 decorator==4.0.10
 hirlite==0.2.0
-praw==4.0.0b21
-prawcore==0.2.1
+packaging==16.8
+praw==4.4.0
+prawcore==0.8.0
+pyparsing==2.1.10
 redis==2.10.5
-requests==2.11.1
+requests==2.13.0
 rollbar==0.13.8
 six==1.10.0
-update-checker==0.12
+update-checker==0.16
 walrus==0.3.4
