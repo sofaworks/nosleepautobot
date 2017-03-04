@@ -406,6 +406,25 @@ class AutoBot(object):
         self.moderator.distinguish(submission.reply(fmt_msg))
         self.moderator.remove(submission)
 
+
+    def post_series_reminder(self, submission):
+        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later."
+
+        base_url = 'https://www.reddit.com/message/compose?'
+        query = {
+            'to': 'RemindMeBot',
+            'subject': 'Reminder',
+            'message': ("[{}]\n\n"
+                        "NOTE: Don't forget to add the time options after the command.\n\n"
+                        "RemindMe!".format(submission.url))
+        }
+
+        urllib.urlencode(query)
+        series_comment = series_message.format(base_url + urllib.urlencode(query))
+        comment = submission.reply(series_comment)
+        comment.mod.distinguish(sticky=True)
+
+
     def set_submission_flair(self, submission, flair):
         """Set a flair for a submission."""
         for f in submission.flair.choices():
@@ -501,6 +520,9 @@ class AutoBot(object):
                         self.set_submission_flair(s, flair='flair-series')
                     except Exception as e:
                         logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
+
+                    # Post the remindme bot message
+                    self.post_series_reminder(s)
 
                     obj.is_series = True
                     obj.sent_series_pm = True
