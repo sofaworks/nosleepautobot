@@ -340,12 +340,12 @@ class AutoBot(object):
         if not self.subreddit.user_is_moderator:
             raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], subreddit.display_name))
 
-    def submission_previously_seen(self, submission):
+    def get_previous_submission_record(self, submission):
         try:
             post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
-            return True
+            return post
         except ValueError:
-            return False
+            return None
 
     def reject_submission_by_timelimit(self, submission):
         """Determine if a submission should be removed based on a time-limit
@@ -406,6 +406,25 @@ class AutoBot(object):
         self.moderator.distinguish(submission.reply(fmt_msg))
         self.moderator.remove(submission)
 
+
+    def post_series_reminder(self, submission):
+        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later."
+
+        base_url = 'https://www.reddit.com/message/compose?'
+        query = {
+            'to': 'RemindMeBot',
+            'subject': 'Reminder',
+            'message': ("[{}]\n\n"
+                        "NOTE: Don't forget to add the time options after the command such as '1 Day' or '48 hours'. This defaults to 1 day.\n\n"
+                        "RemindMe!".format(submission.url))
+        }
+
+        urllib.urlencode(query)
+        series_comment = series_message.format(base_url + urllib.urlencode(query))
+        comment = submission.reply(series_comment)
+        comment.mod.distinguish(sticky=True)
+
+
     def set_submission_flair(self, submission, flair):
         """Set a flair for a submission."""
         for f in submission.flair.choices():
@@ -417,6 +436,7 @@ class AutoBot(object):
                     # Huh, that's weird, our flair doesn't have the key we expected
                     raise
         raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
+
 
     def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
         final_message = []
@@ -470,8 +490,25 @@ class AutoBot(object):
                 sent_series_pm=False,
                 deleted=False)
 
-            if self.submission_previously_seen(s):
-                logging.info("Submission {0} was previously processed. Skipping.".format(s.id))
+            obj = self.get_previous_submission_record(s)
+            if not obj:
+                obj = AutoBotSubmission(
+                        submission_id=s.id,
+                        author=s.author.name,
+                        submission_tiime=int(s.created_utc),
+                        is_series=False,
+                        sent_series_pm=False,
+                        deleted=False)
+            else:
+                logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(s.id))
+                # Do processing on previous submissions to see if we need to add the series message
+                # if we saw this before and it's not a series but then later flaired as one, send
+                # the message
+                if not obj.is_series and (s.link_flair_text == 'Series'):
+                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.")
+                    obj.is_series = True
+                    self.post_series_reminder(s)
+                    obj.save()
                 continue
 
             if self.reject_submission_by_timelimit(s):
@@ -502,11 +539,20 @@ class AutoBot(object):
                     except Exception as e:
                         logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
 
+                    # Post the remindme bot message
+                    self.post_series_reminder(s)
+
                     obj.is_series = True
                     obj.sent_series_pm = True
                 else:
                     # We had no tags at all.
                     logging.info("No tags found in post title.")
+
+                    # Check if this submission has flair
+                    if s.link_flair_text == 'Series':
+                        obj.is_series = True
+                        self.post_series_reminder(s)
+
 
                 logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
                 obj.save()
