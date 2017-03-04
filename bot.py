@@ -340,12 +340,12 @@ class AutoBot(object):
         if not self.subreddit.user_is_moderator:
             raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], subreddit.display_name))
 
-    def submission_previously_seen(self, submission):
+    def get_previous_submission_record(self, submission):
         try:
             post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
-            return True
+            return post
         except ValueError:
-            return False
+            return None
 
     def reject_submission_by_timelimit(self, submission):
         """Determine if a submission should be removed based on a time-limit
@@ -415,7 +415,7 @@ class AutoBot(object):
             'to': 'RemindMeBot',
             'subject': 'Reminder',
             'message': ("[{}]\n\n"
-                        "NOTE: Don't forget to add the time options after the command.\n\n"
+                        "NOTE: Don't forget to add the time options after the command such as '1 Day' or '48 hours'. **This defaults to 1 day.**\n\n"
                         "RemindMe!".format(submission.url))
         }
 
@@ -436,6 +436,7 @@ class AutoBot(object):
                     # Huh, that's weird, our flair doesn't have the key we expected
                     raise
         raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
+
 
     def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
         final_message = []
@@ -489,8 +490,25 @@ class AutoBot(object):
                 sent_series_pm=False,
                 deleted=False)
 
-            if self.submission_previously_seen(s):
-                logging.info("Submission {0} was previously processed. Skipping.".format(s.id))
+            obj = get_previous_submission_record(s)
+            if not submission_record:
+                obj = AutoBotSubmission(
+                        submission_id=s.id,
+                        author=s.author.name,
+                        submission_tiime=int(s.created_utc),
+                        is_series=False,
+                        sent_series_pm=False,
+                        deleted=False)
+            else:
+                logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(s.id))
+                # Do processing on previous submissions to see if we need to add the series message
+                # if we saw this before and it's not a series but then later flaired as one, send
+                # the message
+                if not obj.is_series and (s.link_flair_text == 'Series'):
+                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.")
+                    obj.is_series = True
+                    self.post_series_reminder(s)
+                    obj.save()
                 continue
 
             if self.reject_submission_by_timelimit(s):
@@ -529,6 +547,12 @@ class AutoBot(object):
                 else:
                     # We had no tags at all.
                     logging.info("No tags found in post title.")
+
+                    # Check if this submission has flair
+                    if s.link_flair_text == 'Series':
+                        obj.is_series = True
+                        self.post_series_reminder(s)
+
 
                 logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
                 obj.save()
