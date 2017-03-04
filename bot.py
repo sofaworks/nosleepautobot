@@ -491,7 +491,7 @@ class AutoBot(object):
                 deleted=False)
 
             obj = self.get_previous_submission_record(s)
-            if not submission_record:
+            if not obj:
                 obj = AutoBotSubmission(
                         submission_id=s.id,
                         author=s.author.name,
