@@ -482,76 +482,67 @@ class AutoBot(object):
         logging.info("Processing submissions: {0}".format(recents))
         for s in recents:
             logging.info("Processing submission {0}.".format(s.id))
-            obj = AutoBotSubmission(
-                submission_id=s.id,
-                author=s.author.name,
-                submission_time=int(s.created_utc),
-                is_series=False,
-                sent_series_pm=False,
-                deleted=False)
-
             obj = self.get_previous_submission_record(s)
-            if not obj:
-                obj = AutoBotSubmission(
-                        submission_id=s.id,
-                        author=s.author.name,
-                        submission_tiime=int(s.created_utc),
-                        is_series=False,
-                        sent_series_pm=False,
-                        deleted=False)
-            else:
+            if obj:
                 logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(s.id))
                 # Do processing on previous submissions to see if we need to add the series message
                 # if we saw this before and it's not a series but then later flaired as one, send
                 # the message
                 if not obj.is_series and (s.link_flair_text == 'Series'):
-                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.")
+                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(s.id))
                     obj.is_series = True
                     self.post_series_reminder(s)
                     obj.save()
-                continue
-
-            if self.reject_submission_by_timelimit(s):
-                self.process_time_limit_message(s)
-                obj.deleted = True
             else:
-                # Here we want all the formatting and tag issues
-                formatting_issues = collect_formatting_issues(s.selftext)
-                title_issues = check_valid_title(s.title)
-                post_tags = categorize_tags(s.title)
+                obj = AutoBotSubmission(
+                        submission_id=s.id,
+                        author=s.author.name,
+                        submission_time=int(s.created_utc),
+                        is_series=False,
+                        sent_series_pm=False,
+                        deleted=False)
 
-                if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
-                    # We have bad tags or a bad title! Delete post and send PM.
-                    if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                    if any(title_issues): logging.info("Title issues found")
-                    message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'], title_issues)
-                    self.moderator.distinguish(s.reply(message))
-                    self.moderator.remove(s)
+                if self.reject_submission_by_timelimit(s):
+                    self.process_time_limit_message(s)
                     obj.deleted = True
-                elif post_tags['valid_tags']:
-                    # We have series tags in place. Send a PM
-                    logging.info("Series tags found")
-                    s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
-
-                    # set the series flair for this post
-                    try:
-                        self.set_submission_flair(s, flair='flair-series')
-                    except Exception as e:
-                        logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
-
-                    # Post the remindme bot message
-                    self.post_series_reminder(s)
-
-                    obj.is_series = True
-                    obj.sent_series_pm = True
                 else:
-                    # We had no tags at all.
-                    logging.info("No tags found in post title.")
+                    # Here we want all the formatting and tag issues
+                    formatting_issues = collect_formatting_issues(s.selftext)
+                    title_issues = check_valid_title(s.title)
+                    post_tags = categorize_tags(s.title)
 
-                    # Check if this submission has flair
-                    if s.link_flair_text == 'Series':
-                        obj.is_series = True
+                    if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
+                        # We have bad tags or a bad title! Delete post and send PM.
+                        if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
+                        if any(title_issues): logging.info("Title issues found")
+                        message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'], title_issues)
+                        self.moderator.distinguish(s.reply(message))
+                        self.moderator.remove(s)
+                        obj.deleted = True
+                    elif post_tags['valid_tags']:
+                        # We have series tags in place. Send a PM
+                        logging.info("Series tags found")
+                        s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+
+                        # set the series flair for this post
+                        try:
+                            self.set_submission_flair(s, flair='flair-series')
+                        except Exception as e:
+                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
+
+                        # Post the remindme bot message
                         self.post_series_reminder(s)
+
+                        obj.is_series = True
+                        obj.sent_series_pm = True
+                    else:
+                        # We had no tags at all.
+                        logging.info("No tags found in post title.")
+
+                        # Check if this submission has flair
+                        if s.link_flair_text == 'Series':
+                            obj.is_series = True
+                            self.post_series_reminder(s)
 
 
                 logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
@@ -561,7 +552,6 @@ class AutoBot(object):
                 # of the search date range
                 AutoBotSubmission.set_ttl(obj, cache_ttl)
                 obj.set_index_ttls(cache_ttl)
-
 
 
     def run(self, forever=False, interval=300):
