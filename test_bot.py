@@ -115,6 +115,14 @@ class TestBotMethods(unittest.TestCase):
         self.assertEqual(tags['valid_tags'][0], "volume 1")
         self.assertEqual(tags['valid_tags'][1], "part 2")
 
+
+    def test_additional_categorize_tags(self):
+        title = 'Truckers Have Some of The Best Stories: Gas Shortages and Unraveling Threads (update)'
+        tags = bot.categorize_tags(title)
+        print(tags)
+        self.assertEqual(len(tags['invalid_tags']), 0)
+
+
     def test_categorize_tags_varying_case(self):
         title = 'This is a sample post (VoLuME 1) {PT 2}'
         tags = bot.categorize_tags(title)
