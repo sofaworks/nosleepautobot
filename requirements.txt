@@ -1,11 +1,11 @@
 decorator==4.0.10
 hirlite==0.2.0
-praw==4.4.0
-prawcore==0.8.0
+praw==4.5.1
+prawcore==0.10.1
 pyparsing==2.1.10
 redis==2.10.5
-requests==2.13.0
-rollbar==0.13.8
+requests==2.17.3
+rollbar==0.13.11
 six==1.10.0
 update-checker==0.16
-walrus==0.3.4
+walrus==0.4.1
