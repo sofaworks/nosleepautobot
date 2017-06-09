@@ -396,7 +396,13 @@ class AutoBot(object):
         user_posts = self.get_last_subreddit_submissions(submission.author)
         most_recent = min(user_posts, key=lambda i: i.created_utc)
 
+        logging.info("Previous post by {0} was at: {1}".format(submission.author, most_recent.created_utc))
+        logging.info("Current post by {0} was at: {1}".format(submission.author, submission.created_utc))
         time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
+
+        m, s = divmod(time_to_next_post, 60)
+        h, m = divmod(m, 60)
+        logging.info("Notifying {0} to post again in {1}:{2}:{3}".format(submission.author, int(h), int(m), int(s)))
 
         components = [POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_to_next_post)),
                       BOT_DESCRIPTION.safe_substitute(subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name))]
