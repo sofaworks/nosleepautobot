@@ -8,4 +8,4 @@ requests==2.17.3
 rollbar==0.13.11
 six==1.10.0
 update-checker==0.16
-walrus==0.4.1
+walrus==0.3.4
