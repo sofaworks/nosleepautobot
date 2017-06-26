@@ -418,9 +418,9 @@ class AutoBot(object):
         query = {
             'to': 'RemindMeBot',
             'subject': 'Reminder',
-            'message': ("[{}]\n\n"
-                        "NOTE: Don't forget to add the time options after the command such as '1 Day' or '48 hours'. This defaults to 1 day.\n\n"
-                        "RemindMe!".format(submission.url))
+            'message': (u"[{0}]\n\n"
+                        u"NOTE: Don't forget to add the time options after the command such as '1 Day' or '48 hours'. This defaults to 1 day.\n\n"
+                        u"RemindMe!".format(submission.url))
         }
 
         urllib.urlencode(query)
