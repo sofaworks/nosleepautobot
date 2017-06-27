@@ -4,6 +4,7 @@ from collections import namedtuple
 from string import Template
 import ConfigParser
 import itertools
+import traceback
 import urlparse
 import datetime
 import argparse
@@ -17,6 +18,7 @@ import os
 import re
 
 import rollbar
+from rollbar.logger import RollbarHandler
 import praw
 from walrus import Walrus, Model, TextField, IntegerField, BooleanField
 from praw.models.reddit.subreddit import SubredditModeration
@@ -33,6 +35,8 @@ REDIS_BACKEND = 'redis_backend'
 REDIS_URL = 'redis_url'
 REDIS_PORT = 'redis_port'
 REDIS_PASSWORD = 'redis_password'
+ROLLBAR_ACCESS_TOKEN = 'rollbar_access_token'
+ROLLBAR_ENVIRONMENT = 'rollbar_environment'
 
 
 class NoSuchFlairError(Exception):
@@ -262,7 +266,8 @@ def get_bot_defaults():
             REDIS_BACKEND: 'redis',
             REDIS_URL: 'localhost',
             REDIS_PORT: 6379,
-            REDIS_PASSWORD: None}
+            REDIS_PASSWORD: None,
+            ROLLBAR_ENVIRONMENT: 'staging'}
 
 
 def parse_config(conf):
@@ -270,17 +275,26 @@ def parse_config(conf):
     config = ConfigParser.SafeConfigParser(allow_no_value=True)
     config.readfp(conf)
 
-    return {
-            REDDIT_USERNAME: config.get('autobot', 'user'),
-            REDDIT_PASSWORD: config.get('autobot', 'password'),
-            CLIENT_ID: config.get('autobot', 'client_id'),
-            CLIENT_SECRET: config.get('autobot', 'client_secret'),
-            POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
-            SUBREDDIT: config.get('autobot', 'subreddit'),
-            REDIS_BACKEND: config.get('autobot', 'redis_backend'),
-            REDIS_URL: config.get('autobot', 'redis_url'),
-            REDIS_PORT: config.getint('autobot', 'redis_port')
-        }
+    settings = {
+        REDDIT_USERNAME: config.get('autobot', 'user'),
+        REDDIT_PASSWORD: config.get('autobot', 'password'),
+        CLIENT_ID: config.get('autobot', 'client_id'),
+        CLIENT_SECRET: config.get('autobot', 'client_secret'),
+        POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
+        SUBREDDIT: config.get('autobot', 'subreddit'),
+        REDIS_BACKEND: config.get('autobot', 'redis_backend'),
+        REDIS_URL: config.get('autobot', 'redis_url'),
+        REDIS_PORT: config.getint('autobot', 'redis_port'),
+    }
+
+    if config.has_option('autobot', 'rollbar_access_token'):
+        settings[ROLLBAR_ACCESS_TOKEN] = config.get('autobot', 'rollbar_access_token')
+
+
+    if config.has_option('autobot', 'rollbar_environment'):
+        settings[ROLLBAR_ENVIRONMENT] = config.get('autobot', 'rollbar_environment')
+
+    return settings
 
 
 def get_environment_configuration():
@@ -314,7 +328,9 @@ def get_environment_configuration():
             REDIS_BACKEND: os.getenv('AUTOBOT_REDIS_BACKEND'),
             REDIS_URL: redis_host,
             REDIS_PORT: redis_port,
-            REDIS_PASSWORD: redis_password
+            REDIS_PASSWORD: redis_password,
+            ROLLBAR_ACCESS_TOKEN: os.getenv('ROLLBAR_ACCESS_TOKEN'),
+            ROLLBAR_ENVIRONMENT: os.getenv('ROLLBAR_ENVIRONMENT')
     }
 
     # remove all the 'None' valued things
@@ -344,7 +360,7 @@ class AutoBot(object):
         try:
             post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
             return post
-        except ValueError:
+        except:
             return None
 
     def reject_submission_by_timelimit(self, submission):
@@ -423,8 +439,12 @@ class AutoBot(object):
                         u"RemindMe!".format(submission.url))
         }
 
-        urllib.urlencode(query)
-        series_comment = series_message.format(base_url + urllib.urlencode(query))
+        # urllib doesn't do well with non-ascii characters
+        encoded_query = {}
+        for k, v in query.iteritems():
+            encoded_query[k] = unicode(v).encode('utf-8')
+
+        series_comment = series_message.format(base_url + urllib.urlencode(encoded_query))
         comment = submission.reply(series_comment)
         comment.mod.distinguish(sticky=True)
 
@@ -567,7 +587,8 @@ class AutoBot(object):
         while True:
             try:
                 self.process_posts()
-            except:
+            except Exception as e:
+                logging.exception("bot:run")
                 rollbar.report_exc_info()
 
             if not forever:
@@ -579,8 +600,15 @@ class AutoBot(object):
             time.sleep(sleep_interval)
 
 
+def uncaught_ex_handler(ex_type, value, tb):
+    logging.critical('Got an uncaught exception')
+    logging.critical(''.join(traceback.format_tb(tb)))
+    logging.critical('{0}: {1}'.format(ex_type, value))
+
+
 def transform_and_roll_out():
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    sys.excepthook = uncaught_ex_handler
 
     parser = create_argparser()
     args = parser.parse_args()
@@ -595,8 +623,12 @@ def transform_and_roll_out():
     env_config = get_environment_configuration()
     configuration.update(env_config)
 
+    if ROLLBAR_ACCESS_TOKEN in configuration:
+        rollbar.init(configuration[ROLLBAR_ACCESS_TOKEN], configuration[ROLLBAR_ENVIRONMENT])
+        rollbar_handler = RollbarHandler()
+        rollbar_handler.setLevel(logging.ERROR)
+        logging.getLogger('').addHandler(rollbar_handler)
 
-    rollbar.init(os.getenv('ROLLBAR_ACCESS_TOKEN'), os.getenv('ROLLBAR_ENVIRONMENT'))
 
     # This is hack-city, but since we're constructing the redis data
     # after the fact, we'll now bolt the database back into the baseclass
