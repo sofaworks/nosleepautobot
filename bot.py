@@ -4,6 +4,7 @@ from collections import namedtuple
 from string import Template
 import ConfigParser
 import itertools
+import traceback
 import urlparse
 import datetime
 import argparse
@@ -599,10 +600,15 @@ class AutoBot(object):
             time.sleep(sleep_interval)
 
 
+def uncaught_ex_handler(ex_type, value, tb):
+    logging.critical('Got an uncaught exception')
+    logging.critical(''.join(traceback.format_tb(tb)))
+    logging.critical('{0}: {1}'.format(ex_type, value))
+
+
 def transform_and_roll_out():
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    sys.excepthook = uncaught_ex_handler
 
     parser = create_argparser()
     args = parser.parse_args()
@@ -621,8 +627,7 @@ def transform_and_roll_out():
         rollbar.init(configuration[ROLLBAR_ACCESS_TOKEN], configuration[ROLLBAR_ENVIRONMENT])
         rollbar_handler = RollbarHandler()
         rollbar_handler.setLevel(logging.ERROR)
-        logger.addHandler(rollbar_handler)
-
+        logging.getLogger('').addHandler(rollbar_handler)
 
 
     # This is hack-city, but since we're constructing the redis data
