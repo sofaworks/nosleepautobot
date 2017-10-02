@@ -116,6 +116,17 @@ class TestBotMethods(unittest.TestCase):
         self.assertEqual(tags['valid_tags'][1], "part 2")
 
 
+    def test_update_tags(self):
+        '''Test that tags like 'Update #3' and 'Update 99' are allowed'''
+        title = 'This is a sample [update #3] [update 100] [update1]'
+        tags = bot.categorize_tags(title)
+        self.assertEqual(len(tags['invalid_tags']), 1)
+        self.assertEqual(len(tags['valid_tags']), 2)
+        self.assertEqual(tags['valid_tags'][0], 'update #3')
+        self.assertEqual(tags['valid_tags'][1], 'update 100')
+        self.assertEqual(tags['invalid_tags'][0], 'update1')
+
+
     def test_additional_categorize_tags(self):
         title = 'Truckers Have Some of The Best Stories: Gas Shortages and Unraveling Threads (update)'
         tags = bot.categorize_tags(title)
