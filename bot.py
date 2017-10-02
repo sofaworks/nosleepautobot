@@ -544,9 +544,16 @@ class AutoBot(object):
                         self.moderator.remove(s)
                         obj.deleted = True
                     elif post_tags['valid_tags']:
-                        # We have series tags in place. Send a PM
-                        logging.info("Series tags found")
-                        s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+                        if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
+                            # This was the final story, so don't make a post or send a PM
+                            logging.info("Final tag found, not sending PM/posting")
+                        else:
+                            # We have series tags in place. Send a PM
+                            logging.info("Series tags found")
+                            s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+                            # Post the remindme bot message
+                            self.post_series_reminder(s)
+                            obj.sent_series_pm = True
 
                         # set the series flair for this post
                         try:
@@ -554,11 +561,7 @@ class AutoBot(object):
                         except Exception as e:
                             logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
 
-                        # Post the remindme bot message
-                        self.post_series_reminder(s)
-
                         obj.is_series = True
-                        obj.sent_series_pm = True
                     else:
                         # We had no tags at all.
                         logging.info("No tags found in post title.")
