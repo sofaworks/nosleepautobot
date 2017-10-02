@@ -201,7 +201,7 @@ def categorize_tags(title):
     tag_cats = {'valid_tags': [], 'invalid_tags': []}
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
-    allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|final|update)$")
+    allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|final|update(?:[ ]#?[0-9]*)?)$")
     matches = [m.group() for m in re.finditer("\[([^]]*)\]|\((.*?)\)|\{(.*?)\}", title)]
     # for each match check if it's in the accepted list of tags
 
