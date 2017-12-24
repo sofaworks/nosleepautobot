@@ -432,11 +432,9 @@ class AutoBot(object):
 
         base_url = 'https://www.reddit.com/message/compose?'
         query = {
-            'to': 'RemindMeBot',
-            'subject': 'Reminder',
-            'message': (u"[{0}]\n\n"
-                        u"NOTE: Don't forget to add the time options after the command such as '1 Day' or '48 hours'. This defaults to 1 day.\n\n"
-                        u"RemindMe!".format(submission.url))
+            'to': 'UpdateMeBot',
+            'subject': 'Subscribe',
+            'message': (u"SubscribeMe! /r/nosleep /u/{0}\n\n".format(str(submission.author)))
         }
 
         # urllib doesn't do well with non-ascii characters
