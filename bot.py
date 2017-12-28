@@ -428,7 +428,7 @@ class AutoBot(object):
 
 
     def post_series_reminder(self, submission):
-        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later."
+        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Comment replies will be ignored by me."
 
         base_url = 'https://www.reddit.com/message/compose?'
         query = {
