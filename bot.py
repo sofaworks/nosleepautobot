@@ -428,15 +428,13 @@ class AutoBot(object):
 
 
     def post_series_reminder(self, submission):
-        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later."
+        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Comment replies will be ignored by me."
 
         base_url = 'https://www.reddit.com/message/compose?'
         query = {
-            'to': 'RemindMeBot',
-            'subject': 'Reminder',
-            'message': (u"[{0}]\n\n"
-                        u"NOTE: Don't forget to add the time options after the command such as '1 Day' or '48 hours'. This defaults to 1 day.\n\n"
-                        u"RemindMe!".format(submission.url))
+            'to': 'UpdateMeBot',
+            'subject': 'Subscribe',
+            'message': (u"SubscribeMe! /r/nosleep /u/{0}\n\n".format(str(submission.author)))
         }
 
         # urllib doesn't do well with non-ascii characters
