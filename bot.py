@@ -493,6 +493,10 @@ class AutoBot(object):
         recents = sorted(self.get_recent_submissions(), key=lambda x: x.created_utc)
         logging.info("Processing submissions: {0}".format(recents))
         for s in recents:
+            # temporary measure because of The Purge
+            if s.link_flair_text == 'The Purge':
+                logging.info("Submission {0} was ignored because it was part of 'The Purge'".format(s.id))
+                
             logging.info("Processing submission {0}.".format(s.id))
             obj = self.get_previous_submission_record(s)
             if obj:
