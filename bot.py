@@ -496,6 +496,7 @@ class AutoBot(object):
             # temporary measure because of The Purge
             if s.link_flair_text == 'The Purge':
                 logging.info("Submission {0} was ignored because it was part of 'The Purge'".format(s.id))
+                continue
                 
             logging.info("Processing submission {0}.".format(s.id))
             obj = self.get_previous_submission_record(s)
