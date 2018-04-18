@@ -130,7 +130,6 @@ class TestBotMethods(unittest.TestCase):
     def test_additional_categorize_tags(self):
         title = 'Truckers Have Some of The Best Stories: Gas Shortages and Unraveling Threads (update)'
         tags = bot.categorize_tags(title)
-        print(tags)
         self.assertEqual(len(tags['invalid_tags']), 0)
 
 
