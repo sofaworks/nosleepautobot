@@ -348,9 +348,6 @@ class AutoBot(object):
                 password=configuration[REDDIT_PASSWORD])
 
         self.subreddit = self.reddit.subreddit(configuration[SUBREDDIT])
-
-        self.moderator = SubredditModeration(self.subreddit)
-
         self.time_limit_between_posts = configuration[POST_TIMELIMIT]
 
         if not self.subreddit.user_is_moderator:
@@ -423,8 +420,9 @@ class AutoBot(object):
 
         fmt_msg = ''.join(components)
 
-        self.moderator.distinguish(submission.reply(fmt_msg))
-        self.moderator.remove(submission)
+        mod_comment = submission.reply(fmt_msg)
+        mod_comment.mod.distinguish()
+        submission.mod.remove()
 
 
     def post_series_reminder(self, submission):
@@ -528,8 +526,9 @@ class AutoBot(object):
                         if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
                         if any(title_issues): logging.info("Title issues found")
                         message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'], title_issues)
-                        self.moderator.distinguish(s.reply(message))
-                        self.moderator.remove(s)
+                        com = s.reply(message)
+                        com.mod.distinguish()
+                        s.mod.remove()
                         obj.deleted = True
                     elif post_tags['valid_tags']:
                         if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
