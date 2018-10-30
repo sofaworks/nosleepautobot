@@ -361,7 +361,7 @@ class AutoBot(object):
         self.time_limit_between_posts = configuration[POST_TIMELIMIT]
         self.enforce_timelimit = configuration[ENFORCE_TIMELIMIT]
         
-        logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(self.subreddit, self.enforce_time_limit, self.time_limit_between_posts))
+        logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(self.subreddit, self.enforce_timelimit, self.time_limit_between_posts))
 
         if not self.subreddit.user_is_moderator:
             raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], subreddit.display_name))
