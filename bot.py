@@ -188,7 +188,7 @@ def check_valid_title(title):
 
 def categorize_tags(title):
     """Parses tags out of the post title
-    Valid submission tags are things between [], {}, and ()
+    Valid submission tags are things between [], {}, (), and ||
 
     Valid tag values are:
 
@@ -204,7 +204,7 @@ def categorize_tags(title):
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
     allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
-    matches = [m.group() for m in re.finditer("\[([^]]*)\]|\((.*?)\)|\{(.*?)\}", title)]
+    matches = [m.group() for m in re.finditer("\[([^]]*)\]|\((.*?)\)|\{(.*?)\}|\|(.*?)\|", title)]
     # for each match check if it's in the accepted list of tags
 
     for m in matches:
@@ -235,7 +235,7 @@ def paragraphs_too_long(paragraphs, max_word_count=350):
 
 def title_contains_nsfw(title):
     if not title: return False
-    remap_chars = u'{}[]().!?$*@#'
+    remap_chars = u'{}[]()|.!?$*@#'
     exclude_map = {ord(c) : ord(t) for c, t in zip(remap_chars, u' ' * len(remap_chars))}
     parts = title.lower().translate(exclude_map).split(' ')
     return any('nsfw' == x.strip() for x in parts)
