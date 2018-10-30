@@ -30,6 +30,7 @@ REDDIT_PASSWORD = 'reddit_password'
 CLIENT_ID = 'client_id'
 CLIENT_SECRET = 'client_secret'
 POST_TIMELIMIT = 'seconds_between_posts'
+ENFORCE_TIMELIMIT = 'enforce_post_timelimit'
 SUBREDDIT = 'subreddit'
 REDIS_BACKEND = 'redis_backend'
 REDIS_URL = 'redis_url'
@@ -264,6 +265,7 @@ def collect_formatting_issues(post_body):
 def get_bot_defaults():
     """Returns some defaults for running the bot."""
     return {POST_TIMELIMIT: 86400,
+            ENFORCE_TIMELIMIT: True,
             REDIS_BACKEND: 'redis',
             REDIS_URL: 'localhost',
             REDIS_PORT: 6379,
@@ -282,6 +284,7 @@ def parse_config(conf):
         CLIENT_ID: config.get('autobot', 'client_id'),
         CLIENT_SECRET: config.get('autobot', 'client_secret'),
         POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
+        ENFORCE_TIMELIMIT: config.getboolean('autobot', 'enforce_timelimit'),
         SUBREDDIT: config.get('autobot', 'subreddit'),
         REDIS_BACKEND: config.get('autobot', 'redis_backend'),
         REDIS_URL: config.get('autobot', 'redis_url'),
@@ -305,6 +308,11 @@ def get_environment_configuration():
         time_limit = int(os.getenv('AUTOBOT_POST_TIMELIMIT'))
     except TypeError:
         time_limit = None
+        
+    try:
+        enforce_timelimit = boolean(os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
+    except:
+        enforce_timelimit = None
 
     # if we're using Redis Labs
     redis_cloud_url = os.getenv('REDISCLOUD_URL')
@@ -326,6 +334,7 @@ def get_environment_configuration():
             CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
             CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
             POST_TIMELIMIT: time_limit,
+            ENFORCE_TIMELIMIT: enforce_timelimit,
             REDIS_BACKEND: os.getenv('AUTOBOT_REDIS_BACKEND'),
             REDIS_URL: redis_host,
             REDIS_PORT: redis_port,
@@ -350,6 +359,9 @@ class AutoBot(object):
 
         self.subreddit = self.reddit.subreddit(configuration[SUBREDDIT])
         self.time_limit_between_posts = configuration[POST_TIMELIMIT]
+        self.enforce_timelimit = configuration[ENFORCE_TIMELIMIT]
+        
+        logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(self.subreddit, self.enforce_time_limit, self.time_limit_between_posts))
 
         if not self.subreddit.user_is_moderator:
             raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], subreddit.display_name))
@@ -514,7 +526,7 @@ class AutoBot(object):
                         sent_series_pm=False,
                         deleted=False)
 
-                if self.reject_submission_by_timelimit(s):
+                if self.enforce_timelimit and self.reject_submission_by_timelimit(s):
                     self.process_time_limit_message(s)
                     obj.deleted = True
                 else:
