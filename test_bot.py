@@ -108,12 +108,13 @@ class TestBotMethods(unittest.TestCase):
 
 
     def test_categorize_tags(self):
-        title = 'This is a sample post (volume 1) {part 2}'
+        title = 'This is a sample post (volume 1) {part 2} |part 3|'
         tags = bot.categorize_tags(title)
         self.assertEqual(len(tags['invalid_tags']), 0)
-        self.assertEqual(len(tags['valid_tags']), 2)
+        self.assertEqual(len(tags['valid_tags']), 3)
         self.assertEqual(tags['valid_tags'][0], "volume 1")
         self.assertEqual(tags['valid_tags'][1], "part 2")
+        self.assertEqual(tags['valid_tags'][2], "part 3")
 
 
     def test_update_tags(self):
