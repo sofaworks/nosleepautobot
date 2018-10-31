@@ -14,6 +14,7 @@ import signal
 import string
 import time
 import sys
+import ast
 import os
 import re
 
@@ -310,7 +311,7 @@ def get_environment_configuration():
         time_limit = None
         
     try:
-        enforce_timelimit = boolean(os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
+        enforce_timelimit = ast.literal_eval(os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
     except:
         enforce_timelimit = None
 
