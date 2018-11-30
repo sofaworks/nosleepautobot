@@ -28,6 +28,14 @@ if __name__ == '__main__':
     subreddit = reddit.subreddit(os.environ['AUTOBOT_SUBREDDIT'])
 
     today = datetime.datetime.utcnow()
+    
+    # Run every Friday - since this thing runs in Heroku, which has
+    # very inflexible scheduling (best is once-per-day), this will be enforced
+    # here
+    if today.weekday() != 4:
+        print("Not running mod activity tracker because it's not Friday")
+        sys.exit(0)
+        
     month_start = datetime.datetime(today.year, today.month, 1)
     start_ts = time.mktime(month_start.timetuple())
 
