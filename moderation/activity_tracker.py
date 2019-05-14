@@ -29,6 +29,12 @@ lines as the first line of the message.
 
 * `activity all` - Get a report of all moderator activities for the current month.
 * `activity USERNAME` - Get a report for user or list of users. Separate multiple users by spaces or commas.
+
+You can also specify `--start` and `--end` with dates in YEAR-MONTH-DAY FORMAT to get moderator activities
+within that date range. Some examples are...
+
+* `activity --start 2019-05-10 --end 2019-05-12 all` - Get a report of all moderator activities between May 10 and May 12, 2019.
+* `activity --start 2019-05-10 --end 2019-05-12 USER1,USER2,USER3,USER4` - Get a report of specific moderators' actviities between May 10 and May 12, 2019. Separate multiple users by spaces or commas.
 '''
 
 def _parser():
@@ -38,6 +44,26 @@ def _parser():
     weekly_reporter.set_defaults(func=run_weekly_report)
     ondemand_reporter = subparsers.add_parser('ondemand', help='Ondemand reporting')
     ondemand_reporter.set_defaults(func=execute_ondemand)
+    return parser
+
+def valid_date(d):
+    try:
+        return datetime.datetime.strptime(d, '%Y-%m-%d')
+    except ValueError:
+        raise argparse.ArgumentError('{} is an invalid date'.format(d))
+
+def parser_raise(message):
+    raise Exception(message)
+
+def command_parser():
+    '''Generates a parser that will be used for the comamnds that can be sent in PM'''
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(help='Moderator actions')
+    activity_parser = subparsers.add_parser('activity', help='Generate activity report for moderators')
+    activity_parser.add_argument('--start', type=valid_date)
+    activity_parser.add_argument('--end', type=valid_date)
+    activity_parser.add_argument('users', type=str, nargs='*')
+    parser.error = parser_raise
     return parser
 
 def execute_ondemand():
@@ -91,8 +117,8 @@ class ActivityTracker(object):
             ':---|:---:|:---:|:---:|:---:|:---:'
         ]
 
-    def _get_user_report(self, user, start_time):
-        dlam = lambda a: a.created_utc > start_time
+    def _get_user_report(self, user, start_time, end_time):
+        dlam = lambda a: a.created_utc > start_time and a.created_utc < end_time
 
         return '{}|{}|{}|{}|{}'.format(
             user,
@@ -132,15 +158,26 @@ Friendly reminder to meet your minimums for the month!
             
 
 
-    def _generate_activity_reply(self, users):
+    def _generate_activity_reply(self, users, start=None, end=None):
         if not users:
             return "You didn't specify any users to get a monthly activity report for. Please try again.\n\n" + USAGE_REPLY
 
         today = datetime.datetime.utcnow()
-        month_start = datetime.datetime(today.year, today.month, 1)
-        start_ts = time.mktime(month_start.timetuple())
-        dlam = lambda a: a.created_utc > start_ts
+        if start:
+            start_day = start
+        else:
+            start_day = datetime.datetime(today.year, today.month, 1)
 
+        if end:
+            end_day = end
+        else:
+            end_day = today
+
+        print("Generating activity for {} to {}".format(start_day, end_day))
+
+        start_ts = time.mktime(start_day.timetuple())
+        end_ts = time.mktime(end_day.timetuple())
+        reply_date_range = "{} to {}".format(start_day.strftime('%Y-%m-%d'), end_day.strftime('%Y-%m-%d'))
         all_moderators = [mod.name.lower() for mod in self.subreddit.moderator()]
 
         # For now we only care about 'all' if it's the first user specified
@@ -161,14 +198,14 @@ Friendly reminder to meet your minimums for the month!
                 continue
 
             if user.lower() in all_moderators:
-                reply_bits.append(self._get_user_report(user, start_ts)) 
+                reply_bits.append(self._get_user_report(user, start_ts, end_ts)) 
             else:
                 invalid_users.append(user)
 
         if invalid_users:
             additional_notes = 'Invalid users were specified: {}'.format(','.join(invalid_users))
         else:
-            additional_notes = 'None'
+            additional_notes = 'Have a good day!'
 
         full_reply = '''# Moderator Activity Report {}
 
@@ -182,25 +219,42 @@ Friendly reminder to meet your minimums for the month!
 
 * Due to Reddit's API limitations, only the last 1000 actions for any category will be reported.
 
-* {}'''.format(today.strftime('%B %Y'), today.strftime('%B %d %Y at %I:%M %p'), '\n'.join(reply_bits), additional_notes)
+* {}'''.format(reply_date_range, today.strftime('%B %d %Y at %I:%M %p'), '\n'.join(reply_bits), additional_notes)
 
         return full_reply
 
     def _process_activity_requests(self, requests):
         for msg in requests:
             # extract the first line, as that will be the request
-            fl = msg.body.splitlines()[0].strip().lower()
+            raw_command = msg.body.splitlines()[0].strip().lower()
 
-            # remove all extraneous spaces
-            full_cmd = ' '.join(fl.split(',')).split()
-            if not full_cmd:
-                reply = 'No action was performed because no command was specified.\n\n' + USAGE_REPLY
+            parser = command_parser()
+            # parse the arguments and command
+            problem = None
+            failed = False
+            try:
+                args = parser.parse_args(raw_command.split())
+            except Exception, exc:
+                # The command didn't parse successfully
+                problem = str(exc)
 
-            cmd, users = full_cmd[0], full_cmd[1:]
-            if cmd in ['activity']:
-                reply = self._generate_activity_reply(users)
-            else:
-                reply = 'I received an invalid command `{}` from you. Please try again.\n\n'.format(cmd) + USAGE_REPLY
+            if problem:
+                # bail and send reply
+                logging.error("Exception encountered: {}".format(str(exc)))
+                reply = 'No action was performed because command was invalid: `{}`\n\n{}'.format(raw_command, USAGE_REPLY)
+                failed = True
+            else:# only allow both start and end to be specified together
+                if args.start and not args.end:
+                    reply = 'You specified `--start` but not `--end`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
+                    failed = True
+                if args.end and not args.start:
+                    reply = 'You specified `--end` but not `--start`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
+                    failed = True
+
+            if not failed:
+                # now generate the activity chart
+                users = [item for sublist in [u.split(',') for u in args.users] for item in sublist]
+                reply = self._generate_activity_reply(users, args.start, args.end)
 
             msg.reply(reply)
             msg.mark_read()
