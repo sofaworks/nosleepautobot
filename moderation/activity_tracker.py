@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import os
 import sys
+import json
 import time
 import logging
 import datetime
@@ -13,6 +14,7 @@ import argparse
 import itertools
 
 import praw
+import requests
 
 USER_AGENT = 'r/nosleep moderator tools v1.0 (owner: u/SofaAssassin)'
 
@@ -25,17 +27,89 @@ Did you forgot how to use me? Here are things I can do for you.
 ## Get Moderator Activity
 
 Send a message entitled "Moderator Activity" to me with one of the following
-lines as the first line of the message.
+commands as the first line of the message.
+
+The possible commands are described in detail below.
+
+### Get Moderator Activity
 
 * `activity all` - Get a report of all moderator activities for the current month.
-* `activity USERNAME` - Get a report for user or list of users. Separate multiple users by spaces or commas.
+* `activity USERNAME` - Get a report for a moderator or list of moderators. Separate multiple moderators by spaces or commas.
 
 You can also specify `--start` and `--end` with dates in YEAR-MONTH-DAY FORMAT to get moderator activities
 within that date range. Some examples are...
 
 * `activity --start 2019-05-10 --end 2019-05-12 all` - Get a report of all moderator activities between May 10 and May 12, 2019.
 * `activity --start 2019-05-10 --end 2019-05-12 USER1,USER2,USER3,USER4` - Get a report of specific moderators' actviities between May 10 and May 12, 2019. Separate multiple users by spaces or commas.
+
+### Get Post Activity Report
+
+**Note that due to how Reddit works, you will only have luck doing this for probably the last month.**
+
+* `posts --start YEAR-MONTH-DAY --end YEAR-MONTH-DAY` - Get a post report between the specified days, with total posts and moderator post actions take during that timeframe.
+
+Examples of this command are...
+
+* `posts --start 2019-08-01 --end 2019-08-31` - Get a post report for all days from August 1 - August 30, 2019
+* `posts --start 2019-8-10 --end 2019-8-11` - Get a post report for days from August 10 - August 11, 2019
+* `posts --start 2019-8-10 --end 2019-8-10`  - Get a post report for August 10, 2019
 '''
+
+def total_posts_in_range(subreddit, begin, end):
+    """A wrapper around the PushShift API to get total number of posts in a
+    particular subreddit for between `begin` and `end`. The dates are
+    inclusive.
+   
+    PushShift will return a JSON doc that looks like this, with data keyed by
+    Unix timestamp (in UTC) and the number of submissions on that day.
+
+    The example input would be:
+    subreddit="nosleep"
+    begin="2019-08-01"
+    end="2019-08-02"
+    {
+        "aggs": {
+            "created_utc": [
+                {
+                    "doc_count": 153,
+                    "key": 1564617600
+                },
+                {
+                    "doc_count": 126,
+                    "key": 1564704000
+                }
+            ]
+    }
+
+    The output is going to be a dictionary with key based on ordinal mapped
+    to post count on that day, like this:
+
+    {
+        700000: 100,
+        710000: 200
+    }
+    """
+
+    tf = "%Y-%m-%d"
+    d_end = end + datetime.timedelta(days=1)
+
+    params = {
+        "size": 0,
+        "aggs": "created_utc",
+        "frequency": "day",
+        "subreddit": subreddit,
+        "after": begin.strftime("%Y-%m-%d"),
+        "before": d_end.strftime("%Y-%m-%d")
+    }
+    r = requests.get("https://api.pushshift.io/reddit/submission/search",
+                     params=params)
+
+    data = json.loads(r.text)
+    counts = {}
+    for c in data["aggs"]["created_utc"]:
+        o = datetime.datetime.utcfromtimestamp(c["key"]).toordinal()
+        counts[o] = c["doc_count"]
+    return counts
 
 def _parser():
     parser = argparse.ArgumentParser(description='Run activity reports for users')
@@ -58,17 +132,21 @@ def parser_raise(message):
 def command_parser():
     '''Generates a parser that will be used for the comamnds that can be sent in PM'''
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help='Moderator actions')
+    subparsers = parser.add_subparsers(help='Moderator actions', dest='command')
     activity_parser = subparsers.add_parser('activity', help='Generate activity report for moderators')
     activity_parser.add_argument('--start', type=valid_date)
     activity_parser.add_argument('--end', type=valid_date)
     activity_parser.add_argument('users', type=str, nargs='*')
+
+    posts_parser = subparsers.add_parser('posts', help='Generate post report for time range')
+    posts_parser.add_argument('--start', type=valid_date, required=True)
+    posts_parser.add_argument('--end', type=valid_date, required=True)
     parser.error = parser_raise
     return parser
 
 def execute_ondemand():
     print("Running ondemand report")
-    ActivityTracker().run_ondemand()
+    ActionReporter().run_ondemand()
 
 def run_weekly_report():
     today = datetime.datetime.utcnow()
@@ -76,15 +154,15 @@ def run_weekly_report():
         print("Not running weekly activity tracker because it's not Friday")
         sys.exit(0)
     print("Running weekly moderator report")
-    ActivityTracker().run_weekly()
+    ActionReporter().run_weekly()
 
 def quantify(iterable, pred):
     return sum(itertools.imap(pred, iterable))
 
-class ActivityTracker(object):
+class ActionReporter(object):
     def __init__(self):
         self.approved_users = [u.lower() for u in os.environ['AUTOBOT_APPROVED_OPS'].strip().split(',')]
-        logging.info('ActivityTracker approved users: {}'.format(self.approved_users))
+        logging.info('ActionReporter approved users: {}'.format(self.approved_users))
         self.reddit = praw.Reddit(user_agent=USER_AGENT,
                                   client_id=os.environ['AUTOBOT_CLIENT_ID'],
                                   client_secret=os.environ['AUTOBOT_CLIENT_SECRET'],
@@ -117,15 +195,17 @@ class ActivityTracker(object):
             ':---|:---:|:---:|:---:|:---:|:---:'
         ]
 
-    def _get_user_report(self, user, start_time, end_time):
-        dlam = lambda a: a.created_utc > start_time and a.created_utc < end_time
+    def _get_moderator_actions(self, user, action, limit=1000):
+        return self.subreddit.mod.log(action=action, mod=user, limit=limit)
 
+    def _get_user_report(self, user, start, end):
+        dlam = lambda a: a.created_utc > start and a.created_utc < end
         return '{}|{}|{}|{}|{}'.format(
             user,
-            quantify(self.subreddit.mod.log(action='approvelink', mod=user, limit=1000), dlam),
-            quantify(self.subreddit.mod.log(action='removelink', mod=user, limit=1000), dlam),
-            quantify(self.subreddit.mod.log(action='approvecomment', mod=user, limit=1000), dlam),
-            quantify(self.subreddit.mod.log(action='removecomment', mod=user, limit=1000), dlam)
+            quantify(self._get_moderator_actions(user, 'approvelink'), dlam),
+            quantify(self._get_moderator_actions(user, 'removelink'), dlam),
+            quantify(self._get_moderator_actions(user, 'approvecomment'), dlam),
+            quantify(self._get_moderator_actions(user, 'removecomment'), dlam),
         )
 
     def _send_weekly_reports(self):
@@ -158,18 +238,27 @@ Friendly reminder to meet your minimums for the month!
             
 
 
-    def _generate_activity_reply(self, users, start=None, end=None):
+    def _generate_activity_reply(self, args):
+        #self, users, start=None, end=None):
+       
+        if args.start and not args.end:
+            return 'You specified `--start` but not `--end`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
+        if args.end and not args.start:
+            return 'You specified `--end` but not `--start`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
+
+        # now generate the activity chart
+        users = [item for sublist in [u.split(',') for u in args.users] for item in sublist]
         if not users:
             return "You didn't specify any users to get a monthly activity report for. Please try again.\n\n" + USAGE_REPLY
 
         today = datetime.datetime.utcnow()
-        if start:
-            start_day = start
+        if args.start:
+            start_day = args.start
         else:
             start_day = datetime.datetime(today.year, today.month, 1)
 
-        if end:
-            end_day = end
+        if args.end:
+            end_day = args.end
         else:
             end_day = today
 
@@ -223,6 +312,60 @@ Friendly reminder to meet your minimums for the month!
 
         return full_reply
 
+    def _generate_post_reply(self, args):
+        response = [
+            'Date|Total r/NoSleep Posts|Total Approved|Total Removed',
+            ':---|:---:|:---:|:---:'
+        ]
+        moderators = [mod.name.lower() for mod in self.subreddit.moderator()]
+        post_counts = total_posts_in_range(self.subreddit.display_name, args.start, args.end)
+
+        today = datetime.datetime.utcnow()
+
+        start_ordinal = args.start.toordinal()
+        end_ordinal = args.end.toordinal()
+
+        approvals = {}
+        removals = {}
+        for m in moderators:
+            for approval in self._get_moderator_actions(m, 'approvelink'):
+                ordinal = datetime.datetime.utcfromtimestamp(approval.created_utc).toordinal()
+                approvals.setdefault(ordinal, 0)
+                approvals[ordinal] += 1
+            for removal in self._get_moderator_actions(m, 'removelink'):
+                ordinal = datetime.datetime.utcfromtimestamp(removal.created_utc).toordinal()
+                removals.setdefault(ordinal, 0)
+                removals[ordinal] += 1 
+
+        # now merge the two
+        for k, v in sorted(post_counts.iteritems()):
+            response.append(
+                '{}|{}|{}|{}'.format(
+                    datetime.datetime.fromordinal(k).strftime('%Y-%m-%d'),
+                    v,
+                    approvals[k],
+                    removals[k]
+                )
+            )
+
+        full_reply = '''# NoSleep Post Report
+
+**This report was generated on {}**.
+
+## Post Activity Chart
+
+{}
+
+## Additional Notes
+
+* Due to various limitations, you may have inaccurate counts if your requested
+  days were too long ago.'''.format(
+          today.strftime('%B %d %Y at %I:%M %p'),
+          '\n'.join(response))
+
+        return full_reply
+        
+
     def _process_activity_requests(self, requests):
         for msg in requests:
             # extract the first line, as that will be the request
@@ -231,7 +374,6 @@ Friendly reminder to meet your minimums for the month!
             parser = command_parser()
             # parse the arguments and command
             problem = None
-            failed = False
             try:
                 args = parser.parse_args(raw_command.split())
             except Exception, exc:
@@ -242,19 +384,11 @@ Friendly reminder to meet your minimums for the month!
                 # bail and send reply
                 logging.error("Exception encountered: {}".format(str(exc)))
                 reply = 'No action was performed because command was invalid: `{}`\n\n{}'.format(raw_command, USAGE_REPLY)
-                failed = True
-            else:# only allow both start and end to be specified together
-                if args.start and not args.end:
-                    reply = 'You specified `--start` but not `--end`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
-                    failed = True
-                if args.end and not args.start:
-                    reply = 'You specified `--end` but not `--start`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
-                    failed = True
-
-            if not failed:
-                # now generate the activity chart
-                users = [item for sublist in [u.split(',') for u in args.users] for item in sublist]
-                reply = self._generate_activity_reply(users, args.start, args.end)
+            else:
+                if args.command == 'activity':
+                    reply = self._generate_activity_reply(args)
+                elif args.command == 'posts':
+                    reply = self._generate_post_reply(args)
 
             msg.reply(reply)
             msg.mark_read()
@@ -271,7 +405,7 @@ Friendly reminder to meet your minimums for the month!
 
 
 if __name__ == '__main__':
-    logging.info("Running ActivityTracker standalone...")
+    logging.info("Running ActionReporter standalone...")
     parser = _parser()
     args = parser.parse_args()
     args.func()
