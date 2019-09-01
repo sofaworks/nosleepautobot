@@ -448,6 +448,7 @@ class AutoBot(object):
         series_comment = series_message.format(message_url, issues_url)
         comment = submission.reply(series_comment)
         comment.mod.distinguish(sticky=True)
+        comment.mod.lock()
 
 
     def set_submission_flair(self, submission, flair):
