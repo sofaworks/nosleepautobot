@@ -157,9 +157,6 @@ def run_weekly_report():
     print("Running weekly moderator report")
     ActionReporter().run_weekly()
 
-def quantify(iterable, pred):
-    return sum(itertools.imap(pred, iterable))
-
 class ActionReporter(object):
     def __init__(self):
         self.approved_users = [u.lower() for u in os.environ['AUTOBOT_APPROVED_OPS'].strip().split(',')]
