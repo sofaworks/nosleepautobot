@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
+
+from collections import defaultdict
 import os
 import sys
 import time
@@ -12,9 +14,7 @@ import praw
 from praw.models.reddit.subreddit import SubredditModeration
 
 
-def quantify(iterable, pred):
-    return sum(itertools.imap(pred, iterable))
-
+MOD_ACTIONS = ['approvelink', 'removelink', 'approvecomment', 'removecomment']
 
 if __name__ == '__main__':
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -51,18 +51,24 @@ if __name__ == '__main__':
         if moderator.name.lower() in ['nosleepautobot', 'automoderator']:
             print("Skipping {}".format(moderator))
             continue
-        post_approves = quantify(subreddit.mod.log(action='approvelink', mod=moderator, limit=1000), dlam)
-        post_rejects = quantify(subreddit.mod.log(action='removelink', mod=moderator, limit=1000), dlam)
-        comment_approves = quantify(subreddit.mod.log(action='approvecomment', mod=moderator, limit=1000), dlam)
-        comment_rejects = quantify(subreddit.mod.log(action='removecomment', mod=moderator, limit=1000), dlam)
+
+        action_days = set()
+        summary = defaultdict(int)
+        for action in MOD_ACTIONS:
+            seq = subreddit.mod.log(action=action, mod=moderator, limit=1000)
+            for o in itertools.ifilter(dlam, seq):
+                summary[action] += 1
+                action_days.add(datetime.datetime.utcfromtimestamp(o.created_utc).toordinal())
 
         message = '''
 Hi there {}! Here are your total mod actions from {} to {}:
+
 
 * **Post Approvals**: {}
 * **Post Rejections**: {}
 * **Comment Approvals**: {}
 * **Comment Rejections**: {}
+* **Days Active**: {}
 
 Friendly reminder to meet your minimums for the month!
 
@@ -70,10 +76,11 @@ Friendly reminder to meet your minimums for the month!
         moderator.name,
         month_start.strftime('%B %d %Y'),
         today.strftime('%B %d %Y'),
-        post_approves,
-        post_rejects,
-        comment_approves,
-        comment_rejects)
+        summary['approvelink'],
+        summary['removelink'],
+        summary['approvecomment'],
+        summary['removecomment'],
+        len(action_days))
         print(message)
         
         moderator.message("r/nosleep moderation minimum activity reminder", message)

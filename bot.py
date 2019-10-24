@@ -440,7 +440,7 @@ class AutoBot(object):
 
 
     def post_series_reminder(self, submission):
-        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Got issues? Click [here]({}). Comment replies will be ignored by me."
+        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Got issues? Click [here]({})."
 
         message_url = "https://www.reddit.com/message/compose/?to=UpdateMeBot&subject=Subscribe&message=SubscribeMe%21%20%2Fr%2Fnosleep%20%2Fu%2F{}".format(str(submission.author))
         issues_url = "https://www.reddit.com/r/nosleep/wiki/nosleepautobot"
