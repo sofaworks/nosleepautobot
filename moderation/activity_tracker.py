@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 
+from collections import defaultdict
 import os
 import sys
 import json
@@ -191,8 +192,8 @@ class ActionReporter(object):
 
     def _generate_activity_header(self):
         return [
-            'Moderator Name|Submission Approvals|Submission Removals|Comment Approvals|Comment Removals',
-            ':---|:---:|:---:|:---:|:---:|:---:'
+            'Moderator Name|Submission Approvals|Submission Removals|Comment Approvals|Comment Removals|Active Days',
+            ':---|:---:|:---:|:---:|:---:|:---:|:---:'
         ]
 
     def _get_moderator_actions(self, user, action, limit=1000):
@@ -200,12 +201,22 @@ class ActionReporter(object):
 
     def _get_user_report(self, user, start, end):
         dlam = lambda a: a.created_utc > start and a.created_utc < end
-        return '{}|{}|{}|{}|{}'.format(
+
+        action_days = set()
+        summary = defaultdict(int)
+        for action in ('approvelink', 'removelink', 'approvecomment', 'removecomment'):
+            seq = self._get_moderator_actions(user, action)
+            for o in itertools.ifilter(dlam, seq):
+                summary[action] += 1
+                action_days.add(datetime.datetime.utcfromtimestamp(o.created_utc).toordinal())
+
+        return '{}|{}|{}|{}|{}|{}'.format(
             user,
-            quantify(self._get_moderator_actions(user, 'approvelink'), dlam),
-            quantify(self._get_moderator_actions(user, 'removelink'), dlam),
-            quantify(self._get_moderator_actions(user, 'approvecomment'), dlam),
-            quantify(self._get_moderator_actions(user, 'removecomment'), dlam),
+            summary['approvelink'],
+            summary['removelink'],
+            summary['approvecomment'],
+            summary['removecomment'],
+            len(action_days),
         )
 
     def _send_weekly_reports(self):
