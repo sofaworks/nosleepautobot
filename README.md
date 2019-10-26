@@ -93,4 +93,39 @@ Any configuration setting that can be specified in `noxbot.ini` can alternativel
 * `AUTOBOT_CLIENT_SECRET` - Reddit API OAuth client secret for this application.
 * `AUTOBOT_REDIS_BACKEND` - The type of Redis server the bot connects to (**default**: `redis`)
 
+## Developing NoxBot
 
+In case anyone wants to write code for NoxBot (or just as a reminder to me).
+
+### Set Up
+
+`virtualenv` is highly recommended. The code is currently still in Python 2 (but Python 3 support is coming!).
+
+Set up would look akin to this...
+
+```
+git clone git@github.com:sofaworks/nosleepautobot.git
+cd nosleepautobot
+virtualenv -p python2 venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Running Unit Tests
+
+The bot has a set of unit tests in `test_bot.py` which can be executed with:
+
+```
+python -m unittest test_bot.py
+```
+
+Your tests should pass!
+
+```
+(venv) ☁  nosleepautobot [master] ⚡ python -m unittest test_bot
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 0.005s
+
+OK
+```
