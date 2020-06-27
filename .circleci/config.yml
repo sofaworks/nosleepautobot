@@ -1,0 +1,12 @@
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.8.3
+    steps:
+      - checkout
+      - run:
+          command: |
+            pip install -r requirements.txt
+            pip install fakeredis
+            python -m unittest test_bot test_data
