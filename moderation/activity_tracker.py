@@ -2,7 +2,7 @@
 
 # This creates a class for reporting moderator activity
 
-from __future__ import print_function
+
 
 from collections import defaultdict
 import os
@@ -203,7 +203,7 @@ class ActionReporter(object):
         summary = defaultdict(int)
         for action in ('approvelink', 'removelink', 'approvecomment', 'removecomment'):
             seq = self._get_moderator_actions(user, action)
-            for o in itertools.ifilter(dlam, seq):
+            for o in filter(dlam, seq):
                 summary[action] += 1
                 action_days.add(datetime.datetime.utcfromtimestamp(o.created_utc).toordinal())
 
@@ -346,7 +346,7 @@ Friendly reminder to meet your minimums for the month!
                 removals[ordinal] += 1 
 
         # now merge the two
-        for k, v in sorted(post_counts.iteritems()):
+        for k, v in sorted(post_counts.items()):
             response.append(
                 '{}|{}|{}|{}'.format(
                     datetime.datetime.fromordinal(k).strftime('%Y-%m-%d'),
@@ -384,7 +384,7 @@ Friendly reminder to meet your minimums for the month!
             problem = None
             try:
                 args = parser.parse_args(raw_command.split())
-            except Exception, exc:
+            except Exception as exc:
                 # The command didn't parse successfully
                 problem = str(exc)
 

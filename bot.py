@@ -2,12 +2,12 @@
 
 from collections import namedtuple
 from string import Template
-import ConfigParser
+import configparser
 import traceback
-import urlparse
+import urllib.parse
 import argparse
 import logging
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import time
 import sys
 import ast
@@ -172,8 +172,8 @@ def generate_modmail_link(subreddit, subject=None, message=None):
     if message:
         query['message'] = message
 
-    urllib.urlencode(query)
-    return base_url + urllib.urlencode(query)
+    urllib.parse.urlencode(query)
+    return base_url + urllib.parse.urlencode(query)
 
 
 def check_valid_title(title):
@@ -231,8 +231,8 @@ def paragraphs_too_long(paragraphs, max_word_count=350):
 
 def title_contains_nsfw(title):
     if not title: return False
-    remap_chars = u'{}[]()|.!?$*@#'
-    exclude_map = {ord(c) : ord(t) for c, t in zip(remap_chars, u' ' * len(remap_chars))}
+    remap_chars = '{}[]()|.!?$*@#'
+    exclude_map = {ord(c) : ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))}
     parts = title.lower().translate(exclude_map).split(' ')
     return any('nsfw' == x.strip() for x in parts)
 
@@ -271,7 +271,7 @@ def get_bot_defaults():
 
 def parse_config(conf):
     '''conf is a file or file-like pointer'''
-    config = ConfigParser.SafeConfigParser(allow_no_value=True)
+    config = configparser.SafeConfigParser(allow_no_value=True)
     config.readfp(conf)
 
     settings = {
@@ -314,7 +314,7 @@ def get_environment_configuration():
     redis_cloud_url = os.getenv('REDISCLOUD_URL')
 
     if redis_cloud_url:
-        url = urlparse.urlparse(redis_cloud_url)
+        url = urllib.parse.urlparse(redis_cloud_url)
         redis_host = url.hostname
         redis_port = url.port
         redis_password = url.password
@@ -340,7 +340,7 @@ def get_environment_configuration():
     }
 
     # remove all the 'None' valued things
-    return {k: v for k, v in override.items() if v is not None}
+    return {k: v for k, v in list(override.items()) if v is not None}
 
 
 class AutoBot(object):
