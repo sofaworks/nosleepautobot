@@ -1,9 +1,0 @@
-deployment:
-    production:
-        branch: production
-        heroku:
-            appname: nosleep-autobot
-    staging:
-        branch: master
-        heroku:
-            appname: nosleep-autobot-staging

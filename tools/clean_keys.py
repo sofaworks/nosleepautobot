@@ -2,7 +2,7 @@
 
 import os
 import sys
-import urlparse
+import urllib.parse
 import logging
 
 import rollbar
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     rollbar.init(os.getenv('ROLLBAR_ACCESS_TOKEN'), os.getenv('ROLLBAR_ENVIRONMENT'))
 
     if redis_cloud_url:
-        url = urlparse.urlparse(redis_cloud_url)
+        url = urllib.parse.urlparse(redis_cloud_url)
         redis_host = url.hostname
         redis_port = url.port
         redis_password = url.password

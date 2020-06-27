@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
+
 
 from collections import defaultdict
 import os
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         summary = defaultdict(int)
         for action in MOD_ACTIONS:
             seq = subreddit.mod.log(action=action, mod=moderator, limit=1000)
-            for o in itertools.ifilter(dlam, seq):
+            for o in filter(dlam, seq):
                 summary[action] += 1
                 action_days.add(datetime.datetime.utcfromtimestamp(o.created_utc).toordinal())
 
