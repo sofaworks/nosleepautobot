@@ -3,15 +3,11 @@
 from collections import namedtuple
 from string import Template
 import ConfigParser
-import itertools
 import traceback
 import urlparse
-import datetime
 import argparse
 import logging
 import urllib
-import signal
-import string
 import time
 import sys
 import ast
@@ -22,7 +18,6 @@ import rollbar
 from rollbar.logger import RollbarHandler
 import praw
 from walrus import Walrus, Model, TextField, IntegerField, BooleanField
-from praw.models.reddit.subreddit import SubredditModeration
 
 
 USER_AGENT = 'user_agent'
@@ -243,7 +238,7 @@ def title_contains_nsfw(title):
 
 
 def contains_codeblocks(paragraphs):
-    for idx, p in enumerate(paragraphs):
+    for _, p in enumerate(paragraphs):
         # this determines if the line is not just all whitespace and then
         # whether or not it contains the 4 spaces or tab characters, which
         # will trigger markdown <code> blocks
@@ -309,10 +304,10 @@ def get_environment_configuration():
         time_limit = int(os.getenv('AUTOBOT_POST_TIMELIMIT'))
     except TypeError:
         time_limit = None
-        
+
     try:
         enforce_timelimit = ast.literal_eval(os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
-    except:
+    except Exception:
         enforce_timelimit = None
 
     # if we're using Redis Labs
@@ -361,17 +356,17 @@ class AutoBot(object):
         self.subreddit = self.reddit.subreddit(configuration[SUBREDDIT])
         self.time_limit_between_posts = configuration[POST_TIMELIMIT]
         self.enforce_timelimit = configuration[ENFORCE_TIMELIMIT]
-        
+
         logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(self.subreddit, self.enforce_timelimit, self.time_limit_between_posts))
 
         if not self.subreddit.user_is_moderator:
-            raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], subreddit.display_name))
+            raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], self.subreddit.display_name))
 
     def get_previous_submission_record(self, submission):
         try:
             post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
             return post
-        except:
+        except Exception:
             return None
 
     def reject_submission_by_timelimit(self, submission):
@@ -553,7 +548,10 @@ class AutoBot(object):
                         else:
                             # We have series tags in place. Send a PM
                             logging.info("Series tags found")
-                            s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+                            try:
+                                s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+                            except Exception as e:
+                                logging.info("Problem sending message to {}: {}".format(s.author.name, repr(e)))
                             # Post the remindme bot message
                             self.post_series_reminder(s)
                             obj.sent_series_pm = True
@@ -562,7 +560,7 @@ class AutoBot(object):
                         try:
                             self.set_submission_flair(s, flair='flair-series')
                         except Exception as e:
-                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, e.message))
+                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, str(e)))
 
                         obj.is_series = True
                     else:
@@ -593,7 +591,7 @@ class AutoBot(object):
         while True:
             try:
                 self.process_posts()
-            except Exception as e:
+            except Exception:
                 logging.exception("bot:run")
                 rollbar.report_exc_info()
 
