@@ -1,9 +1,8 @@
-deployment:
-    production:
-        branch: production
-        heroku:
-            appname: nosleep-autobot
-    staging:
-        branch: master
-        heroku:
-            appname: nosleep-autobot-staging
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.8.3
+    steps:
+      - checkout
+      - run: python -m unittest test_bot test_data
