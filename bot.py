@@ -42,12 +42,12 @@ class NoSuchFlairError(Exception):
 
 
 class AutoBotBaseModel(Model):
-    database = None
-    namespace = 'autobot'
+    __database__ = None
+    __namespace__ = 'autobot'
 
     @classmethod
     def set_database(cls, db):
-        cls.database = db
+        cls.__database__ = db
 
 
 class AutoBotSubmission(AutoBotBaseModel):
@@ -68,7 +68,7 @@ class AutoBotSubmission(AutoBotBaseModel):
         for mi in self._indexes:
             for index in mi.get_indexes():
                 key = index.get_key(index.field_value(self)).key
-                self.database.expire(key, ttl)
+                self.__database__.expire(key, ttl)
 
 
 FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
@@ -343,7 +343,7 @@ def get_environment_configuration():
     return {k: v for k, v in list(override.items()) if v is not None}
 
 
-class AutoBot(object):
+class AutoBot:
     def __init__(self, configuration):
         self.time_between_posts = configuration[POST_TIMELIMIT]
 

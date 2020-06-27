@@ -55,15 +55,17 @@ If you have any issues with NoxBot or feature/enhancement requests, it is best t
 ## How to install and run NoxBot?
 _Running NoxBot assumes you already have done the [Reddit OAuth2 quickstart](https://github.com/reddit/reddit/wiki/OAuth2-Quick-Start-Example)_
 
-NoxBot is written in and tested with Python 2.7.x. After you have checked out the source code, you can do the following to start the bot.
+NoxBot is written in and tested with Python 3.8. After you have checked out the source code, you can do the following to start the bot.
 
-    virtualenv venv
-    source venv/bin/activate
+```
+python -m venv venv
+source venv/bin/activate
 
-    pip install -r requirements.txt
+pip install -r requirements.txt
 
-    # Copy noxbot.ini.sample to noxbot.ini and modify its values, especially for credentials/authentication.
-    python bot.py -c noxbot.ini
+# Copy noxbot.ini.sample to noxbot.ini and modify its values, especially for credentials/authentication.
+python bot.py -c noxbot.ini
+```
 
 ### NoxBot execution flags
 
@@ -99,14 +101,16 @@ In case anyone wants to write code for NoxBot (or just as a reminder to me).
 
 ### Set Up
 
-`virtualenv` is highly recommended. The code is currently still in Python 2 (but Python 3 support is coming!).
+**Python 2.x support has been removed as Python 2.x [has been EOL'ed as of January 1, 2020](https://www.python.org/doc/sunset-python-2/).**
+
+python3's `venv` module is highly recommended. This codebase has been written and tested against Python 3.8.
 
 Set up would look akin to this...
 
 ```
 git clone git@github.com:sofaworks/nosleepautobot.git
 cd nosleepautobot
-virtualenv -p python2 venv
+python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -116,16 +120,23 @@ pip install -r requirements.txt
 The bot has a set of unit tests in `test_bot.py` which can be executed with:
 
 ```
-python -m unittest test_bot.py
+python -m unittest test_bot
 ```
 
 Your tests should pass!
 
 ```
-(venv) ☁  nosleepautobot [master] ⚡ python -m unittest test_bot
+(venv) nosleepautobot [master] > python -m unittest test_bot
 ...............
 ----------------------------------------------------------------------
 Ran 15 tests in 0.005s
 
 OK
+```
+
+There are also a small set of tests meant to ensure that the Redis portions of code work correctly. To run these tests, do the following:
+
+```
+pip install fakeredis
+python -m unittest test_data
 ```
