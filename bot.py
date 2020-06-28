@@ -1,13 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/python
+# vim: set fileencoding=<encoding name> :
+
+'''Defines the main bot.'''
 
 from collections import namedtuple
 from string import Template
 import configparser
 import traceback
-import urllib.parse
 import argparse
 import logging
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
+import urllib.error
 import time
 import sys
 import ast
@@ -37,8 +41,7 @@ ROLLBAR_ENVIRONMENT = 'rollbar_environment'
 
 
 class NoSuchFlairError(Exception):
-    """Custom exception class when a flair doesn't exist."""
-    pass
+    '''Custom exception class when a flair doesn't exist.'''
 
 
 class AutoBotBaseModel(Model):
@@ -46,8 +49,8 @@ class AutoBotBaseModel(Model):
     __namespace__ = 'autobot'
 
     @classmethod
-    def set_database(cls, db):
-        cls.__database__ = db
+    def set_database(cls, database):
+        cls.__database__ = database
 
 
 class AutoBotSubmission(AutoBotBaseModel):
@@ -71,25 +74,26 @@ class AutoBotSubmission(AutoBotBaseModel):
                 self.__database__.expire(key, ttl)
 
 
-FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
+FormattingIssues = namedtuple(
+    'FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
 TitleIssues = namedtuple('TitleIssues', ['title_contains_nsfw'])
 
 
 POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
-                      'in order to give all submitters here an equal shot at the front page.\n\n'
-                      'As such, your post has been removed. Feel free to repost your story '
-                      'in **${time_remaining}**.\n\n'
-                      'Confused? See the [mod announcement](http://www.reddit.com/r/NoSleepOOC/comments/1m1spe/rule_addition_one_days_spacing_between_nosleep/) '
-                      'on the subject for more information. If you believe your post was removed in error, please '
-                      '[message the moderators](http://www.reddit.com/message/compose?to=%2Fr%2Fnosleep).'
-                      )
+                              'in order to give all submitters here an equal shot at the front page.\n\n'
+                              'As such, your post has been removed. Feel free to repost your story '
+                              'in **${time_remaining}**.\n\n'
+                              'Confused? See the [mod announcement](http://www.reddit.com/r/NoSleepOOC/comments/1m1spe/rule_addition_one_days_spacing_between_nosleep/) '
+                              'on the subject for more information. If you believe your post was removed in error, please '
+                              '[message the moderators](http://www.reddit.com/message/compose?to=%2Fr%2Fnosleep).'
+                              )
 
 PERMANENT_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
-                                    'for violating the following rules:')
+                                         'for violating the following rules:')
 
 TEMPORARY_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been **temporarily** '
-                                    'removed from /r/nosleep due to the following formatting issues '
-                                    'detected in your post:')
+                                         'removed from /r/nosleep due to the following formatting issues '
+                                         'detected in your post:')
 
 DISALLOWED_TAGS_MESSAGE = ('\n\n* **Invalid Tags**\n\n'
                            '  /r/nosleep has strict rules about tags in story titles:\n\n'
@@ -112,17 +116,17 @@ ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following issues have be
 
 
 SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep series! '
-                  'Awesome! Please be sure to double-check that [your post](${post_url}) '
-                  'has "series" flair and please remember to include a link '
-                  'to the previous part at the top of your story.\n\n'
-                  "Don't know how to add flair? Visit your story's comment page "
-                  'and look underneath the post itself. Click on the **flair** button '
-                  'to bring up a list of options. Choose the "series" option and hit "save"!')
+                          'Awesome! Please be sure to double-check that [your post](${post_url}) '
+                          'has "series" flair and please remember to include a link '
+                          'to the previous part at the top of your story.\n\n'
+                          "Don't know how to add flair? Visit your story's comment page "
+                          'and look underneath the post itself. Click on the **flair** button '
+                          'to bring up a list of options. Choose the "series" option and hit "save"!')
 
-LONG_PARAGRAPH_MESSAGE= ('\n\n* **Long Paragraphs Detected**\n\n'
-                         '  You have one or more paragraphs containing more than 350 words. '
-                         'Please break up your story into smaller paragraphs. You can create paragraphs '
-                         'by pressing `Enter` twice at the end of a line.')
+LONG_PARAGRAPH_MESSAGE = ('\n\n* **Long Paragraphs Detected**\n\n'
+                          '  You have one or more paragraphs containing more than 350 words. '
+                          'Please break up your story into smaller paragraphs. You can create paragraphs '
+                          'by pressing `Enter` twice at the end of a line.')
 
 CODEBLOCK_MESSAGE = ('\n\n* **Paragraph with 4 (or more) Starting Spaces Detected**\n\n'
                      '  You have one or more paragraphs beginning with a tab or four or more spaces.\n\n'
@@ -132,22 +136,24 @@ CODEBLOCK_MESSAGE = ('\n\n* **Paragraph with 4 (or more) Starting Spaces Detecte
                      'of a line if you haven\'t already done so.')
 
 FORMATTING_CLOSE = Template('\n\n**Once you have fixed your formatting issues, please [click here](${modmail_link}) to request reapproval.** '
-                    'The re-approval process is manual, so send a single request only. Multiple requests '
-                    'do not mean faster approval; in fact they will clog the modqueue and result in '
-                    're-approvals taking even more time.')
+                            'The re-approval process is manual, so send a single request only. Multiple requests '
+                            'do not mean faster approval; in fact they will clog the modqueue and result in '
+                            're-approvals taking even more time.')
 
 BOT_DESCRIPTION = Template('\n\n_I am a bot, and this was automatically posted. '
-                    'Do not reply to me as messages will be ignored. '
-                    'Please [contact the moderators of this subreddit](${subreddit_mail_uri}) '
-                    'if you have any questions, concerns, or bugs to report._')
-
+                           'Do not reply to me as messages will be ignored. '
+                           'Please [contact the moderators of this subreddit](${subreddit_mail_uri}) '
+                           'if you have any questions, concerns, or bugs to report._')
 
 
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
-    parser.add_argument('-c', '--conf', required=False, type=str, help='Configuration file to use for the bot')
-    parser.add_argument('--forever', required=False, action='store_true', help='If specified, runs bot forever.')
-    parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
+    parser.add_argument('-c', '--conf', required=False,
+                        type=str, help='Configuration file to use for the bot')
+    parser.add_argument('--forever', required=False,
+                        action='store_true', help='If specified, runs bot forever.')
+    parser.add_argument('-i', '--interval', required=False, type=int, default=300,
+                        help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
     return parser
 
 
@@ -163,8 +169,8 @@ def generate_reapproval_message(post_url):
 def generate_modmail_link(subreddit, subject=None, message=None):
     base_url = 'https://www.reddit.com/message/compose?'
     query = {
-                'to': '/r/{0}'.format(subreddit),
-            }
+        'to': '/r/{0}'.format(subreddit),
+    }
 
     if subject:
         query['subject'] = subject
@@ -199,8 +205,10 @@ def categorize_tags(title):
     tag_cats = {'valid_tags': [], 'invalid_tags': []}
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
-    allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
-    matches = [m.group() for m in re.finditer("\[([^]]*)\]|\((.*?)\)|\{(.*?)\}|\|(.*?)\|", title)]
+    allowed_tag_values = re.compile(
+        r"^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
+    matches = [m.group() for m in re.finditer(
+        r"\[([^]]*)\]|\((.*?)\)|\{(.*?)\}|\|(.*?)\|", title)]
     # for each match check if it's in the accepted list of tags
 
     for m in matches:
@@ -230,11 +238,13 @@ def paragraphs_too_long(paragraphs, max_word_count=350):
 
 
 def title_contains_nsfw(title):
-    if not title: return False
+    if not title:
+        return False
     remap_chars = '{}[]()|.!?$*@#'
-    exclude_map = {ord(c) : ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))}
+    exclude_map = {ord(c): ord(t)
+                   for c, t in zip(remap_chars, ' ' * len(remap_chars))}
     parts = title.lower().translate(exclude_map).split(' ')
-    return any('nsfw' == x.strip() for x in parts)
+    return any(x.strip() == 'nsfw' for x in parts)
 
 
 def contains_codeblocks(paragraphs):
@@ -254,8 +264,8 @@ def collect_formatting_issues(post_body):
     # * At least two instances of whitespace followed by a newline
     paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n|\t\n)', post_body)
     return FormattingIssues(
-            paragraphs_too_long(paragraphs),
-            contains_codeblocks(paragraphs))
+        paragraphs_too_long(paragraphs),
+        contains_codeblocks(paragraphs))
 
 
 def get_bot_defaults():
@@ -272,7 +282,7 @@ def get_bot_defaults():
 def parse_config(conf):
     '''conf is a file or file-like pointer'''
     config = configparser.SafeConfigParser(allow_no_value=True)
-    config.readfp(conf)
+    config.read_file(conf)
 
     settings = {
         REDDIT_USERNAME: config.get('autobot', 'user'),
@@ -288,11 +298,12 @@ def parse_config(conf):
     }
 
     if config.has_option('autobot', 'rollbar_access_token'):
-        settings[ROLLBAR_ACCESS_TOKEN] = config.get('autobot', 'rollbar_access_token')
-
+        settings[ROLLBAR_ACCESS_TOKEN] = config.get(
+            'autobot', 'rollbar_access_token')
 
     if config.has_option('autobot', 'rollbar_environment'):
-        settings[ROLLBAR_ENVIRONMENT] = config.get('autobot', 'rollbar_environment')
+        settings[ROLLBAR_ENVIRONMENT] = config.get(
+            'autobot', 'rollbar_environment')
 
     return settings
 
@@ -306,7 +317,8 @@ def get_environment_configuration():
         time_limit = None
 
     try:
-        enforce_timelimit = ast.literal_eval(os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
+        enforce_timelimit = ast.literal_eval(
+            os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
     except Exception:
         enforce_timelimit = None
 
@@ -324,19 +336,19 @@ def get_environment_configuration():
         redis_password = None
 
     override = {
-            REDDIT_USERNAME: os.getenv('AUTOBOT_REDDIT_USERNAME'),
-            REDDIT_PASSWORD: os.getenv('AUTOBOT_REDDIT_PASSWORD'),
-            SUBREDDIT: os.getenv('AUTOBOT_SUBREDDIT'),
-            CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
-            CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
-            POST_TIMELIMIT: time_limit,
-            ENFORCE_TIMELIMIT: enforce_timelimit,
-            REDIS_BACKEND: os.getenv('AUTOBOT_REDIS_BACKEND'),
-            REDIS_URL: redis_host,
-            REDIS_PORT: redis_port,
-            REDIS_PASSWORD: redis_password,
-            ROLLBAR_ACCESS_TOKEN: os.getenv('ROLLBAR_ACCESS_TOKEN'),
-            ROLLBAR_ENVIRONMENT: os.getenv('ROLLBAR_ENVIRONMENT')
+        REDDIT_USERNAME: os.getenv('AUTOBOT_REDDIT_USERNAME'),
+        REDDIT_PASSWORD: os.getenv('AUTOBOT_REDDIT_PASSWORD'),
+        SUBREDDIT: os.getenv('AUTOBOT_SUBREDDIT'),
+        CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
+        CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
+        POST_TIMELIMIT: time_limit,
+        ENFORCE_TIMELIMIT: enforce_timelimit,
+        REDIS_BACKEND: os.getenv('AUTOBOT_REDIS_BACKEND'),
+        REDIS_URL: redis_host,
+        REDIS_PORT: redis_port,
+        REDIS_PASSWORD: redis_password,
+        ROLLBAR_ACCESS_TOKEN: os.getenv('ROLLBAR_ACCESS_TOKEN'),
+        ROLLBAR_ENVIRONMENT: os.getenv('ROLLBAR_ENVIRONMENT')
     }
 
     # remove all the 'None' valued things
@@ -348,23 +360,26 @@ class AutoBot:
         self.time_between_posts = configuration[POST_TIMELIMIT]
 
         self.reddit = praw.Reddit(user_agent='/r/nosleep AutoBot v 1.0 (by /u/SofaAssassin)',
-                client_id=configuration[CLIENT_ID],
-                client_secret=configuration[CLIENT_SECRET],
-                username=configuration[REDDIT_USERNAME],
-                password=configuration[REDDIT_PASSWORD])
+                                  client_id=configuration[CLIENT_ID],
+                                  client_secret=configuration[CLIENT_SECRET],
+                                  username=configuration[REDDIT_USERNAME],
+                                  password=configuration[REDDIT_PASSWORD])
 
         self.subreddit = self.reddit.subreddit(configuration[SUBREDDIT])
         self.time_limit_between_posts = configuration[POST_TIMELIMIT]
         self.enforce_timelimit = configuration[ENFORCE_TIMELIMIT]
 
-        logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(self.subreddit, self.enforce_timelimit, self.time_limit_between_posts))
+        logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(
+            self.subreddit, self.enforce_timelimit, self.time_limit_between_posts))
 
         if not self.subreddit.user_is_moderator:
-            raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], self.subreddit.display_name))
+            raise AssertionError("User {0} is not moderator of subreddit {1}".format(
+                configuration[REDDIT_USERNAME], self.subreddit.display_name))
 
     def get_previous_submission_record(self, submission):
         try:
-            post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
+            post = AutoBotSubmission.get(
+                AutoBotSubmission.submission_id == submission.id)
             return post
         except Exception:
             return None
@@ -388,7 +403,8 @@ class AutoBot:
         if most_recent and (most_recent.id != submission.id):
             next_post_allowed_time = most_recent.created_utc + self.time_limit_between_posts
             if next_post_allowed_time > now:
-                logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(submission.id, submission.author.name))
+                logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(
+                    submission.id, submission.author.name))
                 return True
 
         return False
@@ -396,8 +412,10 @@ class AutoBot:
     def get_recent_submissions(self):
         """Get most recent submissions from the subreddit (right now it fetches the last hour's worth of results)."""
         logging.info("Retrieving submissions from the last hour")
-        submissions = list(self.subreddit.search('subreddit:{0}'.format(self.subreddit.display_name), time_filter='hour', syntax='lucene', sort='new'))
-        logging.info("Found {0} submissions in /r/{1} from the last hour.".format(len(submissions), self.subreddit.display_name))
+        submissions = list(self.subreddit.search('subreddit:{0}'.format(
+            self.subreddit.display_name), time_filter='hour', syntax='lucene', sort='new'))
+        logging.info("Found {0} submissions in /r/{1} from the last hour.".format(
+            len(submissions), self.subreddit.display_name))
         return submissions
 
     def get_last_subreddit_submissions(self, redditor, sort='new'):
@@ -405,9 +423,10 @@ class AutoBot:
         # This has to be done via cloudsearch because Reddit apparently doesn't enable
         # semantic hyphening in their lucene indexes, so user names with hyphens in them
         # will return improper results.
-        search_results = list(self.subreddit.search("author:{0}".format(redditor.name), time_filter='day', syntax='cloudsearch', sort=sort))
+        search_results = list(self.subreddit.search("author:{0}".format(
+            redditor.name), time_filter='day', syntax='cloudsearch', sort=sort))
         logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
-                         len(search_results), redditor.name, self.subreddit.display_name))
+            len(search_results), redditor.name, self.subreddit.display_name))
         return search_results
 
     def process_time_limit_message(self, submission):
@@ -418,11 +437,15 @@ class AutoBot:
         user_posts = self.get_last_subreddit_submissions(submission.author)
         most_recent = min(user_posts, key=lambda i: i.created_utc)
 
-        logging.info("Previous post by {0} was at: {1}".format(submission.author, most_recent.created_utc))
-        logging.info("Current post by {0} was at: {1}".format(submission.author, submission.created_utc))
-        time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
+        logging.info("Previous post by {0} was at: {1}".format(
+            submission.author, most_recent.created_utc))
+        logging.info("Current post by {0} was at: {1}".format(
+            submission.author, submission.created_utc))
+        time_to_next_post = self.time_limit_between_posts - \
+            (submission.created_utc - most_recent.created_utc)
 
-        logging.info("Notifying {0} to post again in {1}".format(submission.author, englishify_time(time_to_next_post)))
+        logging.info("Notifying {0} to post again in {1}".format(
+            submission.author, englishify_time(time_to_next_post)))
 
         components = [POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_to_next_post)),
                       BOT_DESCRIPTION.safe_substitute(subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name))]
@@ -433,11 +456,14 @@ class AutoBot:
         mod_comment.mod.distinguish()
         submission.mod.remove()
 
-
     def post_series_reminder(self, submission):
+        '''For posts that are series, make a stickied top comment to identify
+        it as potentially a series.'''
+
         series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Got issues? Click [here]({})."
 
-        message_url = "https://www.reddit.com/message/compose/?to=UpdateMeBot&subject=Subscribe&message=SubscribeMe%21%20%2Fr%2Fnosleep%20%2Fu%2F{}".format(str(submission.author))
+        message_url = "https://www.reddit.com/message/compose/?to=UpdateMeBot&subject=Subscribe&message=SubscribeMe%21%20%2Fr%2Fnosleep%20%2Fu%2F{}".format(
+            str(submission.author))
         issues_url = "https://www.reddit.com/r/nosleep/wiki/nosleepautobot"
 
         series_comment = series_message.format(message_url, issues_url)
@@ -445,26 +471,25 @@ class AutoBot:
         comment.mod.distinguish(sticky=True)
         comment.mod.lock()
 
-
     def set_submission_flair(self, submission, flair):
         """Set a flair for a submission."""
         for f in submission.flair.choices():
             if f['flair_css_class'].lower() == flair.lower():
-                try:
-                    submission.flair.select(f['flair_template_id'])
-                    return
-                except KeyError:
-                    # Huh, that's weird, our flair doesn't have the key we expected
-                    raise
-        raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
+                submission.flair.select(f['flair_template_id'])
+                return
 
+        raise NoSuchFlairError(
+            "Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
 
     def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
         final_message = []
         if invalid_tags or any(title_issues):
-            final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
-            if invalid_tags: final_message.append(DISALLOWED_TAGS_MESSAGE)
-            if title_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
+            final_message.append(
+                PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
+            if invalid_tags:
+                final_message.append(DISALLOWED_TAGS_MESSAGE)
+            if title_issues.title_contains_nsfw:
+                final_message.append(NSFW_TITLE_MESSAGE)
             final_message.append(REPOST_MESSAGE)
             if any(formatting_issues):
                 final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
@@ -479,19 +504,20 @@ class AutoBot:
                                                      'Please reapprove submission',
                                                      generate_reapproval_message(post.shortlink))
 
-                final_message.append(TEMPORARY_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
+                final_message.append(
+                    TEMPORARY_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
 
                 if formatting_issues.long_paragraphs:
                     final_message.append(LONG_PARAGRAPH_MESSAGE)
                 if formatting_issues.has_codeblocks:
                     final_message.append(CODEBLOCK_MESSAGE)
-                final_message.append(FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
+                final_message.append(
+                    FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
 
         final_message.append(BOT_DESCRIPTION.safe_substitute(
             subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name)))
 
         return ''.join(final_message)
-
 
     def process_posts(self):
         cache_ttl = self.time_limit_between_posts * 2
@@ -499,29 +525,32 @@ class AutoBot:
         # for all submissions, check to see if any of them should be rejected based on the time limit
         # Get all recent submissions and then sort them into ascending order
         # As each submission is processed, check it against a user's new posts in descending posted order
-        recents = sorted(self.get_recent_submissions(), key=lambda x: x.created_utc)
+        recents = sorted(self.get_recent_submissions(),
+                         key=lambda x: x.created_utc)
         logging.info("Processing submissions: {0}".format(recents))
         for s in recents:
             logging.info("Processing submission {0}.".format(s.id))
             obj = self.get_previous_submission_record(s)
             if obj:
-                logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(s.id))
+                logging.info(
+                    "Submission {0} was previously processed. Doing previous submission checks.".format(s.id))
                 # Do processing on previous submissions to see if we need to add the series message
                 # if we saw this before and it's not a series but then later flaired as one, send
                 # the message
                 if not obj.is_series and (s.link_flair_text == 'Series'):
-                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(s.id))
+                    logging.info(
+                        "Submission {0} was flaired 'Series' after the fact. Posting series message.".format(s.id))
                     obj.is_series = True
                     self.post_series_reminder(s)
                     obj.save()
             else:
                 obj = AutoBotSubmission(
-                        submission_id=s.id,
-                        author=s.author.name,
-                        submission_time=int(s.created_utc),
-                        is_series=False,
-                        sent_series_pm=False,
-                        deleted=False)
+                    submission_id=s.id,
+                    author=s.author.name,
+                    submission_time=int(s.created_utc),
+                    is_series=False,
+                    sent_series_pm=False,
+                    deleted=False)
 
                 if self.enforce_timelimit and self.reject_submission_by_timelimit(s):
                     self.process_time_limit_message(s)
@@ -534,9 +563,13 @@ class AutoBot:
 
                     if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
                         # We have bad tags or a bad title! Delete post and send PM.
-                        if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                        if any(title_issues): logging.info("Title issues found")
-                        message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'], title_issues)
+                        if post_tags['invalid_tags']:
+                            logging.info("Bad tags found: {0}".format(
+                                post_tags['invalid_tags']))
+                        if any(title_issues):
+                            logging.info("Title issues found")
+                        message = self.prepare_delete_message(
+                            s, formatting_issues, post_tags['invalid_tags'], title_issues)
                         com = s.reply(message)
                         com.mod.distinguish()
                         s.mod.remove()
@@ -544,14 +577,17 @@ class AutoBot:
                     elif post_tags['valid_tags']:
                         if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
                             # This was the final story, so don't make a post or send a PM
-                            logging.info("Final tag found, not sending PM/posting")
+                            logging.info(
+                                "Final tag found, not sending PM/posting")
                         else:
                             # We have series tags in place. Send a PM
                             logging.info("Series tags found")
                             try:
-                                s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+                                s.author.message("Reminder about your series post on r/nosleep",
+                                                 SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
                             except Exception as e:
-                                logging.info("Problem sending message to {}: {}".format(s.author.name, repr(e)))
+                                logging.info("Problem sending message to {}: {}".format(
+                                    s.author.name, repr(e)))
                             # Post the remindme bot message
                             self.post_series_reminder(s)
                             obj.sent_series_pm = True
@@ -560,7 +596,8 @@ class AutoBot:
                         try:
                             self.set_submission_flair(s, flair='flair-series')
                         except Exception as e:
-                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, str(e)))
+                            logging.exception(
+                                "Unexpected problem setting flair for {0}: {1}".format(s.id, str(e)))
 
                         obj.is_series = True
                     else:
@@ -572,15 +609,14 @@ class AutoBot:
                             obj.is_series = True
                             self.post_series_reminder(s)
 
-
-                logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
+                logging.info(
+                    "Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
                 obj.save()
 
                 # Save for double the TTL in case Reddit's API returns things out
                 # of the search date range
                 AutoBotSubmission.set_ttl(obj, cache_ttl)
                 obj.set_index_ttls(cache_ttl)
-
 
     def run(self, forever=False, interval=300):
         """Run the autobot to find posts. Can be specified to run `forever`
@@ -598,9 +634,11 @@ class AutoBot:
             if not forever:
                 break
 
-            sleep_interval = float(interval) - ((time.time() - bot_start_time) % float(interval))
+            sleep_interval = float(
+                interval) - ((time.time() - bot_start_time) % float(interval))
 
-            logging.info("Sleeping for {0} seconds until next run.".format(sleep_interval))
+            logging.info(
+                "Sleeping for {0} seconds until next run.".format(sleep_interval))
             time.sleep(sleep_interval)
 
 
@@ -628,15 +666,16 @@ def transform_and_roll_out():
     configuration.update(env_config)
 
     if ROLLBAR_ACCESS_TOKEN in configuration:
-        rollbar.init(configuration[ROLLBAR_ACCESS_TOKEN], configuration[ROLLBAR_ENVIRONMENT])
+        rollbar.init(configuration[ROLLBAR_ACCESS_TOKEN],
+                     configuration[ROLLBAR_ENVIRONMENT])
         rollbar_handler = RollbarHandler()
         rollbar_handler.setLevel(logging.ERROR)
         logging.getLogger('').addHandler(rollbar_handler)
 
-
     # This is hack-city, but since we're constructing the redis data
     # after the fact, we'll now bolt the database back into the baseclass
-    walrus = Walrus(host=configuration[REDIS_URL], port=configuration[REDIS_PORT], password=configuration[REDIS_PASSWORD])
+    walrus = Walrus(
+        host=configuration[REDIS_URL], port=configuration[REDIS_PORT], password=configuration[REDIS_PASSWORD])
     AutoBotBaseModel.set_database(walrus)
 
     bot = AutoBot(configuration)

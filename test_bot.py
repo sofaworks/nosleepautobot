@@ -1,12 +1,21 @@
-import unittest
+# -*- coding: utf-8 -*-
+'''These define the non-Redis/data access test cases for the bot.'''
+
 from urllib.parse import urlparse, parse_qs
+import unittest
+import datetime
+import os
 
 import bot
+
 
 class TestBotMethods(unittest.TestCase):
 
     def test_generate_modmail_link(self):
-        modlink = bot.generate_modmail_link('testsr', 'some title', 'some body')
+        '''Test that the modmail link has all the expected URL
+        components.'''
+        modlink = bot.generate_modmail_link(
+            'testsr', 'some title', 'some body')
         parsed_url = urlparse(modlink)
 
         query = parse_qs(parsed_url.query)
@@ -20,6 +29,8 @@ class TestBotMethods(unittest.TestCase):
         self.assertEqual(query['subject'][0], 'some title')
 
     def test_generate_empty_modmail_link(self):
+        '''Test that empty modmail messages are generated if various
+        arguments aren't passed to the generate_modmail_link method.'''
         modlink = bot.generate_modmail_link('testsr')
         parsed_url = urlparse(modlink)
         query = parse_qs(parsed_url.query)
@@ -28,6 +39,7 @@ class TestBotMethods(unittest.TestCase):
         self.assertFalse('subject' in query)
 
     def test_generate_reapproval_message(self):
+        '''Test that the reapproval link is generated correctly'''
         msg = bot.generate_reapproval_message('http://localhost/mail')
 
         self.assertTrue(msg.startswith('[My post](http://localhost/mail)'))
@@ -38,12 +50,12 @@ class TestBotMethods(unittest.TestCase):
         self.assertFalse(bot.title_contains_nsfw('NsFw_title_with_spaces'))
         self.assertTrue(bot.title_contains_nsfw('nsfw leading title'))
         self.assertTrue(bot.title_contains_nsfw('Title ending with NSFW'))
-        self.assertFalse(bot.title_contains_nsfw('Title that does not contain bad words'))
+        self.assertFalse(bot.title_contains_nsfw(
+            'Title that does not contain bad words'))
         self.assertTrue(bot.title_contains_nsfw('Title with an [NSFW] tag'))
         self.assertTrue(bot.title_contains_nsfw('!NSFW!'))
         self.assertTrue(bot.title_contains_nsfw('Is this post NSFW?'))
         self.assertTrue(bot.title_contains_nsfw('Hi [Part 2] [NSFW]'))
-
 
     def test_reject_long_paragraphs(self):
         '''This test asserts that paragraphs > (length) words are rejected.'''
@@ -62,20 +74,24 @@ class TestBotMethods(unittest.TestCase):
         self.assertFalse(bot.paragraphs_too_long([add_text]))
 
     def test_live_story_paragraphs(self):
+        '''Test that lines with double spaces at the end, which is valid
+        Markdown for generating a 'newline', doesn't trigger false
+        positives for violating whitespace checks.'''
         # Soul Cancer initiated issue #13
-        with open('tests/soul_cancer.md', 'r') as sc:
-            story = sc.read()
+        with open('tests/soul_cancer.md', 'r') as infile:
+            story = infile.read()
             issues = bot.collect_formatting_issues(story)
             self.assertFalse(issues.long_paragraphs)
 
-
     def test_chezecaek_full_story(self):
+        '''Test that blank lines containing whitespace combinations
+        like \t\n don't generate false positives for violating the
+        whitespace check.'''
         # Chezecaek initiated issue #17
-        with open('tests/chezecaek.md', 'r') as sc:
-            story = sc.read()
+        with open('tests/chezecaek.md', 'r') as infile:
+            story = infile.read()
             issues = bot.collect_formatting_issues(story)
             self.assertFalse(issues.has_codeblocks)
-
 
     def test_reject_long_paragraphs_funky_newlines(self):
         '''Test edge case long paragraphs (newlines)'''
@@ -87,7 +103,6 @@ class TestBotMethods(unittest.TestCase):
         text += ' '.join(['more'] * 100)
         issues = bot.collect_formatting_issues(text)
         self.assertFalse(issues.long_paragraphs)
-
 
     def test_contains_codeblocks(self):
         '''Test for codeblocks in a message'''
@@ -106,8 +121,9 @@ class TestBotMethods(unittest.TestCase):
 
         self.assertFalse(bot.contains_codeblocks(['']))
 
-
     def test_categorize_tags(self):
+        '''Test that the post categorizer picks out valid/invalid tag
+        markers.'''
         title = 'This is a sample post (volume 1) {part 2} |part 3|'
         tags = bot.categorize_tags(title)
         self.assertEqual(len(tags['invalid_tags']), 0)
@@ -115,7 +131,6 @@ class TestBotMethods(unittest.TestCase):
         self.assertEqual(tags['valid_tags'][0], "volume 1")
         self.assertEqual(tags['valid_tags'][1], "part 2")
         self.assertEqual(tags['valid_tags'][2], "part 3")
-
 
     def test_update_tags(self):
         '''Test that tags like 'Update #3' and 'Update 99' are allowed'''
@@ -127,14 +142,15 @@ class TestBotMethods(unittest.TestCase):
         self.assertEqual(tags['valid_tags'][1], 'update 100')
         self.assertEqual(tags['invalid_tags'][0], 'update1')
 
-
     def test_additional_categorize_tags(self):
-        title = 'Truckers Have Some of The Best Stories: Gas Shortages and Unraveling Threads (update)'
+        '''Test that non-valid tags are caught.'''
+        title = ('Truckers Have Some of The Best Stories: '
+                 'Gas Shortages and Unraveling Threads (update)')
         tags = bot.categorize_tags(title)
         self.assertEqual(len(tags['invalid_tags']), 0)
 
-
     def test_categorize_tags_varying_case(self):
+        '''Test that tag matching is case-insensitive.'''
         title = 'This is a sample post (VoLuME 1) {PT 2}'
         tags = bot.categorize_tags(title)
 
@@ -144,17 +160,16 @@ class TestBotMethods(unittest.TestCase):
         self.assertEqual(tags['valid_tags'][1], "pt 2")
 
     def test_englishify_time(self):
-        import datetime
-        td = datetime.timedelta(days=1, hours=3, minutes=30, seconds=30)
+        '''Test that translating some arbitrary amount of time to English
+        works correctly.'''
+        delta = datetime.timedelta(days=1, hours=3, minutes=30, seconds=30)
 
-        time_string = bot.englishify_time(td.total_seconds())
+        time_string = bot.englishify_time(delta.total_seconds())
 
         self.assertEqual(time_string, "27 hours, 30 minutes, 30 seconds")
 
     def test_empty_configuration_environment(self):
-        """Tests that get_environment_configuration returns
-        empty configurations if there are no environment variables set"""
-        import os
+        '''Tests that get_environment_configuration returns
+        empty configurations if there are no environment variables set.'''
         os.environ.clear()
         self.assertFalse(bool(bot.get_environment_configuration()))
-
