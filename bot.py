@@ -405,7 +405,7 @@ class AutoBot:
         # This has to be done via cloudsearch because Reddit apparently doesn't enable
         # semantic hyphening in their lucene indexes, so user names with hyphens in them
         # will return improper results.
-        search_results = list(self.subreddit.search("author:{0}".format(redditor.name), time_filter='day', syntax='cloudsearch', sort=sort))
+        search_results = list(self.subreddit.search('author:"{0}"'.format(redditor.name), time_filter='day', syntax='cloudsearch', sort=sort))
         logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
                          len(search_results), redditor.name, self.subreddit.display_name))
         return search_results
