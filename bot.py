@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
+from collections.abc import Iterator
 from collections import namedtuple
+from operator import attrgetter
 from string import Template
 import configparser
+import itertools
 import traceback
 import urllib.parse
 import argparse
@@ -142,6 +145,10 @@ BOT_DESCRIPTION = Template('\n\n_I am a bot, and this was automatically posted. 
                     'if you have any questions, concerns, or bugs to report._')
 
 
+def partition(cond, it):
+    """Partition a list in twain based on cond."""
+    x, y = itertools.tee(it)
+    return itertools.filterfalse(cond, x), filter(cond, y)
 
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
@@ -393,12 +400,17 @@ class AutoBot:
 
         return False
 
-    def get_recent_submissions(self):
-        """Get most recent submissions from the subreddit (right now it fetches the last hour's worth of results)."""
+    def get_recent_submissions(self) -> Iterator[praw.models.Submission]:
+        """Get most recent submissions from the subreddit - right now it
+        fetches the last hour's worth of results."""
         logging.info("Retrieving submissions from the last hour")
-        submissions = list(self.subreddit.search('subreddit:{0}'.format(self.subreddit.display_name), time_filter='hour', syntax='lucene', sort='new'))
-        logging.info("Found {0} submissions in /r/{1} from the last hour.".format(len(submissions), self.subreddit.display_name))
-        return submissions
+        posts = self.subreddit.search(
+            f'subreddit:{self.subreddit.display_name}',
+            time_filter='hour',
+            syntax='lucene',
+            sort='new'
+        )
+        return posts
 
     def get_last_subreddit_submissions(self, redditor, sort='new'):
         # Retrieve the data from the API of all the posts made by this author in the last 24 hours.
@@ -493,53 +505,62 @@ class AutoBot:
         return ''.join(final_message)
 
 
-    def process_posts(self):
+    def process_posts(self, restrict_to_sub: bool = True):
         cache_ttl = self.time_limit_between_posts * 2
 
         # for all submissions, check to see if any of them should be rejected based on the time limit
         # Get all recent submissions and then sort them into ascending order
         # As each submission is processed, check it against a user's new posts in descending posted order
-        recents = sorted(self.get_recent_submissions(), key=lambda x: x.created_utc)
-        logging.info("Processing submissions: {0}".format(recents))
-        for s in recents:
-            logging.info("Processing submission {0}.".format(s.id))
-            obj = self.get_previous_submission_record(s)
+        posts = sorted(self.get_recent_submissions(), key=attrgetter('created_utc'))
+
+        logging.info(f"Found {len(posts)} submissions in /r/{self.subreddit.display_name} from the last hour.")
+
+        # prevent issue 102 from happening
+        if restrict_to_sub:
+            bad, posts = partition(lambda _: _.subreddit.display_name == self.subreddit.display_name, posts)
+            inv  = ' '.join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
+            if inv:
+                logging.warn(f"Search returned posts from other subs! {inv}")
+
+        for p in posts:
+            logging.info("Processing submission {0}.".format(p.id))
+            obj = self.get_previous_submission_record(p)
             if obj:
-                logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(s.id))
+                logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
                 # Do processing on previous submissions to see if we need to add the series message
                 # if we saw this before and it's not a series but then later flaired as one, send
                 # the message
-                if not obj.is_series and (s.link_flair_text == 'Series'):
-                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(s.id))
+                if not obj.is_series and (p.link_flair_text == 'Series'):
+                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(p.id))
                     obj.is_series = True
-                    self.post_series_reminder(s)
+                    self.post_series_reminder(p)
                     obj.save()
             else:
                 obj = AutoBotSubmission(
-                        submission_id=s.id,
-                        author=s.author.name,
-                        submission_time=int(s.created_utc),
+                        submission_id=p.id,
+                        author=p.author.name,
+                        submission_time=int(p.created_utc),
                         is_series=False,
                         sent_series_pm=False,
                         deleted=False)
 
-                if self.enforce_timelimit and self.reject_submission_by_timelimit(s):
-                    self.process_time_limit_message(s)
+                if self.enforce_timelimit and self.reject_submission_by_timelimit(p):
+                    self.process_time_limit_message(p)
                     obj.deleted = True
                 else:
                     # Here we want all the formatting and tag issues
-                    formatting_issues = collect_formatting_issues(s.selftext)
-                    title_issues = check_valid_title(s.title)
-                    post_tags = categorize_tags(s.title)
+                    formatting_issues = collect_formatting_issues(p.selftext)
+                    title_issues = check_valid_title(p.title)
+                    post_tags = categorize_tags(p.title)
 
                     if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
                         # We have bad tags or a bad title! Delete post and send PM.
                         if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
                         if any(title_issues): logging.info("Title issues found")
-                        message = self.prepare_delete_message(s, formatting_issues, post_tags['invalid_tags'], title_issues)
-                        com = s.reply(message)
+                        message = self.prepare_delete_message(p, formatting_issues, post_tags['invalid_tags'], title_issues)
+                        com = p.reply(message)
                         com.mod.distinguish()
-                        s.mod.remove()
+                        p.mod.remove()
                         obj.deleted = True
                     elif post_tags['valid_tags']:
                         if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
@@ -549,18 +570,18 @@ class AutoBot:
                             # We have series tags in place. Send a PM
                             logging.info("Series tags found")
                             try:
-                                s.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=s.shortlink), None)
+                                p.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=p.shortlink), None)
                             except Exception as e:
-                                logging.info("Problem sending message to {}: {}".format(s.author.name, repr(e)))
+                                logging.info("Problem sending message to {}: {}".format(p.author.name, repr(e)))
                             # Post the remindme bot message
-                            self.post_series_reminder(s)
+                            self.post_series_reminder(p)
                             obj.sent_series_pm = True
 
                         # set the series flair for this post
                         try:
-                            self.set_submission_flair(s, flair='flair-series')
+                            self.set_submission_flair(p, flair='flair-series')
                         except Exception as e:
-                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(s.id, str(e)))
+                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(p.id, str(e)))
 
                         obj.is_series = True
                     else:
@@ -568,12 +589,12 @@ class AutoBot:
                         logging.info("No tags found in post title.")
 
                         # Check if this submission has flair
-                        if s.link_flair_text == 'Series':
+                        if p.link_flair_text == 'Series':
                             obj.is_series = True
-                            self.post_series_reminder(s)
+                            self.post_series_reminder(p)
 
 
-                logging.info("Caching metadata for submission {0} for {1} seconds".format(s.id, cache_ttl))
+                logging.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))
                 obj.save()
 
                 # Save for double the TTL in case Reddit's API returns things out
