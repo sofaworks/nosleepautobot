@@ -1,4 +1,4 @@
-praw==7.5.0
-rollbar==0.16.2
-walrus==0.9.1
-requests==2.27.1
+praw==7.6.0
+requests==2.28.1
+rollbar==0.16.3
+walrus==0.9.2
