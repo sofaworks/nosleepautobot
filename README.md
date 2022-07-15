@@ -79,7 +79,6 @@ NoxBot supports a number of flags for running, just type `python bot.py --help` 
 
 	optional arguments:
 	  -h, --help            show this help message and exit
-	  -c CONF, --conf CONF  Configuration file to use for the bot
 	  --forever             If specified, runs bot forever.
 	  -i INTERVAL, --interval INTERVAL
 	                        How many seconds to wait between bot execution cycles.
@@ -87,17 +86,20 @@ NoxBot supports a number of flags for running, just type `python bot.py --help` 
 
 ### NoxBot Environment Variable-based Configuration
 
-Any configuration setting that can be specified in `noxbot.ini` can alternatively be specified via environment variables, including:
+The bot reads the following environment variables for configuration.
 
-* `AUTOBOT_POST_TIMELIMIT` - Time limit between allowed posts in seconds (**default**: 86400)
-* `AUTOBOT_REDIS_URL` - URL to Redis instance (**default**: localhost)
-* `AUTOBOT_REDIS_PORT` - Port to connect to on Redis (**default**: 6379)
-* `AUTOBOT_REDDIT_USERNAME` - Username the NoxBot authenticates as
-* `AUTOBOT_REDDIT_PASSWORD` - Password of specified user
-* `AUTOBOT_SUBREDDIT` - Subreddit to run bot against. Specified user **has to be a moderator** of the subreddit.
-* `AUTOBOT_CLIENT_ID` - Reddit API OAuth client ID for this application.
-* `AUTOBOT_CLIENT_SECRET` - Reddit API OAuth client secret for this application.
-* `AUTOBOT_REDIS_BACKEND` - The type of Redis server the bot connects to (**default**: `redis`)
+| Setting Name | Description | Required? |
+| ------------ | ----------- | --------- |
+| `AUTOBOT_USER_AGENT` | User agent string for the bot | Yes |
+| `AUTOBOT_POST_TIMELIMIT` | Time limit between allowed posts in seconds | No (**default**: `86400`) |
+| `AUTOBOT_REDDIT_USERNAME` | Username the bot authenticates as | Yes |
+| `AUTOBOT_REDDIT_PASSWORD` | Password of specified user | Yes |
+| `AUTOBOT_CLIENT_ID` | Reddit API OAuth client ID for this application | Yes |
+| `AUTOBOT_CLIENT_SECRET` | Reddit API OAuth client secret for this application | Yes |
+| `AUTOBOT_SUBREDDIT` | Subreddit to run bot against. Specified user **has to be a moderator** of the subreddit. | Yes |
+| `REDIS_URL` | Redis URL | Yes |
+
+Configuration settings can also be specified via a `autobot.env` file. An example `autobot.env.sample` is included that you can rename and configure.
 
 ## Developing NoxBot
 
