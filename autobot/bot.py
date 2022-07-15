@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from collections import namedtuple
 from operator import attrgetter
 from string import Template
-import configparser
 import itertools
 import traceback
 import urllib.parse
@@ -13,32 +12,16 @@ import logging
 import urllib.request, urllib.parse, urllib.error
 import time
 import sys
-import ast
-import os
 import re
 
 from autobot.models import AutoBotBase, AutoBotSubmission
+from autobot.config import Settings
 
-import rollbar
-from rollbar.logger import RollbarHandler
 import praw
+import rollbar
+
+from rollbar.logger import RollbarHandler
 from walrus import Walrus
-
-
-USER_AGENT = 'user_agent'
-REDDIT_USERNAME = 'reddit_username'
-REDDIT_PASSWORD = 'reddit_password'
-CLIENT_ID = 'client_id'
-CLIENT_SECRET = 'client_secret'
-POST_TIMELIMIT = 'seconds_between_posts'
-ENFORCE_TIMELIMIT = 'enforce_post_timelimit'
-SUBREDDIT = 'subreddit'
-REDIS_BACKEND = 'redis_backend'
-REDIS_URL = 'redis_url'
-REDIS_PORT = 'redis_port'
-REDIS_PASSWORD = 'redis_password'
-ROLLBAR_ACCESS_TOKEN = 'rollbar_access_token'
-ROLLBAR_ENVIRONMENT = 'rollbar_environment'
 
 
 class NoSuchFlairError(Exception):
@@ -122,9 +105,9 @@ def partition(cond, it):
     x, y = itertools.tee(it)
     return itertools.filterfalse(cond, x), filter(cond, y)
 
+
 def create_argparser():
     parser = argparse.ArgumentParser(prog='bot.py')
-    parser.add_argument('-c', '--conf', required=False, type=str, help='Configuration file to use for the bot')
     parser.add_argument('--forever', required=False, action='store_true', help='If specified, runs bot forever.')
     parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
     return parser
@@ -237,109 +220,26 @@ def collect_formatting_issues(post_body):
             contains_codeblocks(paragraphs))
 
 
-def get_bot_defaults():
-    """Returns some defaults for running the bot."""
-    return {POST_TIMELIMIT: 86400,
-            ENFORCE_TIMELIMIT: True,
-            REDIS_BACKEND: 'redis',
-            REDIS_URL: 'localhost',
-            REDIS_PORT: 6379,
-            REDIS_PASSWORD: None,
-            ROLLBAR_ENVIRONMENT: 'staging'}
-
-
-def parse_config(conf):
-    '''conf is a file or file-like pointer'''
-    config = configparser.SafeConfigParser(allow_no_value=True)
-    config.readfp(conf)
-
-    settings = {
-        REDDIT_USERNAME: config.get('autobot', 'user'),
-        REDDIT_PASSWORD: config.get('autobot', 'password'),
-        CLIENT_ID: config.get('autobot', 'client_id'),
-        CLIENT_SECRET: config.get('autobot', 'client_secret'),
-        POST_TIMELIMIT: config.getint('autobot', 'seconds_between_allowed_posts'),
-        ENFORCE_TIMELIMIT: config.getboolean('autobot', 'enforce_timelimit'),
-        SUBREDDIT: config.get('autobot', 'subreddit'),
-        REDIS_BACKEND: config.get('autobot', 'redis_backend'),
-        REDIS_URL: config.get('autobot', 'redis_url'),
-        REDIS_PORT: config.getint('autobot', 'redis_port'),
-    }
-
-    if config.has_option('autobot', 'rollbar_access_token'):
-        settings[ROLLBAR_ACCESS_TOKEN] = config.get('autobot', 'rollbar_access_token')
-
-
-    if config.has_option('autobot', 'rollbar_environment'):
-        settings[ROLLBAR_ENVIRONMENT] = config.get('autobot', 'rollbar_environment')
-
-    return settings
-
-
-def get_environment_configuration():
-    """Gets configurations specified in environment variables"""
-
-    try:
-        time_limit = int(os.getenv('AUTOBOT_POST_TIMELIMIT'))
-    except TypeError:
-        time_limit = None
-
-    try:
-        enforce_timelimit = ast.literal_eval(os.getenv('AUTOBOT_ENFORCE_TIMELIMIT'))
-    except Exception:
-        enforce_timelimit = None
-
-    # if we're using Redis Labs
-    redis_cloud_url = os.getenv('REDISCLOUD_URL')
-
-    if redis_cloud_url:
-        url = urllib.parse.urlparse(redis_cloud_url)
-        redis_host = url.hostname
-        redis_port = url.port
-        redis_password = url.password
-    else:
-        redis_host = os.getenv('AUTOBOT_REDIS_URL')
-        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
-        redis_password = None
-
-    override = {
-            REDDIT_USERNAME: os.getenv('AUTOBOT_REDDIT_USERNAME'),
-            REDDIT_PASSWORD: os.getenv('AUTOBOT_REDDIT_PASSWORD'),
-            SUBREDDIT: os.getenv('AUTOBOT_SUBREDDIT'),
-            CLIENT_ID: os.getenv('AUTOBOT_CLIENT_ID'),
-            CLIENT_SECRET: os.getenv('AUTOBOT_CLIENT_SECRET'),
-            POST_TIMELIMIT: time_limit,
-            ENFORCE_TIMELIMIT: enforce_timelimit,
-            REDIS_BACKEND: os.getenv('AUTOBOT_REDIS_BACKEND'),
-            REDIS_URL: redis_host,
-            REDIS_PORT: redis_port,
-            REDIS_PASSWORD: redis_password,
-            ROLLBAR_ACCESS_TOKEN: os.getenv('ROLLBAR_ACCESS_TOKEN'),
-            ROLLBAR_ENVIRONMENT: os.getenv('ROLLBAR_ENVIRONMENT')
-    }
-
-    # remove all the 'None' valued things
-    return {k: v for k, v in list(override.items()) if v is not None}
-
-
 class AutoBot:
-    def __init__(self, configuration):
-        self.time_between_posts = configuration[POST_TIMELIMIT]
+    def __init__(self, cfg: Settings):
+        self.cfg = cfg
+        self.reddit = praw.Reddit(
+                user_agent=self.cfg.user_agent,
+                client_id=self.cfg.client_id,
+                client_secret=self.cfg.client_secret,
+                username=self.cfg.reddit_username,
+                password=self.cfg.reddit_password
+        )
+        self.subreddit = self.reddit.subreddit(self.cfg.subreddit)
 
-        self.reddit = praw.Reddit(user_agent='/r/nosleep AutoBot v 1.0 (by /u/SofaAssassin)',
-                client_id=configuration[CLIENT_ID],
-                client_secret=configuration[CLIENT_SECRET],
-                username=configuration[REDDIT_USERNAME],
-                password=configuration[REDDIT_PASSWORD])
-
-        self.subreddit = self.reddit.subreddit(configuration[SUBREDDIT])
-        self.time_limit_between_posts = configuration[POST_TIMELIMIT]
-        self.enforce_timelimit = configuration[ENFORCE_TIMELIMIT]
-
-        logging.info("Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(self.subreddit, self.enforce_timelimit, self.time_limit_between_posts))
+        logging.info(f"Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(
+            self.subreddit.display_name,
+            self.cfg.enforce_timelimit,
+            self.cfg.post_timelimit
+        ))
 
         if not self.subreddit.user_is_moderator:
-            raise AssertionError("User {0} is not moderator of subreddit {1}".format(configuration[REDDIT_USERNAME], self.subreddit.display_name))
+            raise AssertionError(f"User {self.cfg.reddit_username} is not moderator of subreddit {self.subreddit.display_name}")
 
     def get_previous_submission_record(self, submission):
         try:
@@ -365,7 +265,7 @@ class AutoBot:
             most_recent = None
 
         if most_recent and (most_recent.id != submission.id):
-            next_post_allowed_time = most_recent.created_utc + self.time_limit_between_posts
+            next_post_allowed_time = most_recent.created_utc + self.cfg.post_timelimit
             if next_post_allowed_time > now:
                 logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(submission.id, submission.author.name))
                 return True
@@ -404,7 +304,7 @@ class AutoBot:
 
         logging.info("Previous post by {0} was at: {1}".format(submission.author, most_recent.created_utc))
         logging.info("Current post by {0} was at: {1}".format(submission.author, submission.created_utc))
-        time_to_next_post = self.time_limit_between_posts - (submission.created_utc - most_recent.created_utc)
+        time_to_next_post = self.cfg.post_timelimit - (submission.created_utc - most_recent.created_utc)
 
         logging.info("Notifying {0} to post again in {1}".format(submission.author, englishify_time(time_to_next_post)))
 
@@ -429,7 +329,6 @@ class AutoBot:
         comment.mod.distinguish(sticky=True)
         comment.mod.lock()
 
-
     def set_submission_flair(self, submission, flair):
         """Set a flair for a submission."""
         for f in submission.flair.choices():
@@ -441,7 +340,6 @@ class AutoBot:
                     # Huh, that's weird, our flair doesn't have the key we expected
                     raise
         raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
-
 
     def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
         final_message = []
@@ -478,7 +376,7 @@ class AutoBot:
 
 
     def process_posts(self, restrict_to_sub: bool = True):
-        cache_ttl = self.time_limit_between_posts * 2
+        cache_ttl = self.cfg.post_timelimit * 2
 
         # for all submissions, check to see if any of them should be rejected based on the time limit
         # Get all recent submissions and then sort them into ascending order
@@ -516,7 +414,7 @@ class AutoBot:
                         sent_series_pm=False,
                         deleted=False)
 
-                if self.enforce_timelimit and self.reject_submission_by_timelimit(p):
+                if self.cfg.enforce_timelimit and self.reject_submission_by_timelimit(p):
                     self.process_time_limit_message(p)
                     obj.deleted = True
                 else:
@@ -603,6 +501,13 @@ def uncaught_ex_handler(ex_type, value, tb):
     logging.critical('{0}: {1}'.format(ex_type, value))
 
 
+def init_rollbar(token: str, environment: str) -> None:
+    rollbar.init(token, environment)
+    rollbar_handler = RollbarHandler()
+    rollbar_handler.setLevel(logging.ERROR)
+    logging.getLogger('').addHandler(rollbar_handler)
+
+
 def transform_and_roll_out():
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     sys.excepthook = uncaught_ex_handler
@@ -610,29 +515,17 @@ def transform_and_roll_out():
     parser = create_argparser()
     args = parser.parse_args()
 
-    configuration = get_bot_defaults()
+    settings = Settings()
 
-    if args.conf:
-        with open(args.conf) as cfile:
-            configuration.update(parse_config(cfile))
-
-    # Environment variables override configuration file settings
-    env_config = get_environment_configuration()
-    configuration.update(env_config)
-
-    if ROLLBAR_ACCESS_TOKEN in configuration:
-        rollbar.init(configuration[ROLLBAR_ACCESS_TOKEN], configuration[ROLLBAR_ENVIRONMENT])
-        rollbar_handler = RollbarHandler()
-        rollbar_handler.setLevel(logging.ERROR)
-        logging.getLogger('').addHandler(rollbar_handler)
-
+    if settings.rollbar_token:
+        init_rollbar(settings.rollbar_token, settings.rollbar_env)
 
     # This is hack-city, but since we're constructing the redis data
     # after the fact, we'll now bolt the database back into the baseclass
-    walrus = Walrus(host=configuration[REDIS_URL], port=configuration[REDIS_PORT], password=configuration[REDIS_PASSWORD])
+    walrus = Walrus.from_url(settings.redis_url)
     AutoBotBase.set_database(walrus)
 
-    bot = AutoBot(configuration)
+    bot = AutoBot(settings)
     bot.run(args.forever, args.interval)
 
 

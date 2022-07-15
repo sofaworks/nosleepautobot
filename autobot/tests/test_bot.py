@@ -1,12 +1,14 @@
-import unittest
+import os
+from unittest import TestCase, mock
 
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import autobot.bot as bot
+from autobot.config import Settings
 
 
-class TestBotMethods(unittest.TestCase):
+class TestBotMethods(TestCase):
     def _get_files_dir(self) -> Path:
         return Path(__file__).resolve().parent / "files"
 
@@ -150,9 +152,48 @@ class TestBotMethods(unittest.TestCase):
 
         self.assertEqual(time_string, "27 hours, 30 minutes, 30 seconds")
 
-    def test_empty_configuration_environment(self):
-        """Tests that get_environment_configuration returns
-        empty configurations if there are no environment variables set"""
-        import os
-        os.environ.clear()
-        self.assertFalse(bool(bot.get_environment_configuration()))
+    def test_config(self):
+        """Test that standard config loading is correct."""
+        timeout = 86400
+        cfg = {
+            "autobot_post_timelimit": str(timeout),
+            "autobot_user_agent": "a-user-agent",
+            "autobot_enforce_timelimit": "true",
+            "autobot_reddit_username": "username",
+            "autobot_reddit_password": "password",
+            "autobot_subreddit": "nosleep",
+            "autobot_client_id": "client-id",
+            "autobot_client_secret": "client-secret",
+            "redis_url": "redis://user:pass@localhost:6379/1"
+        }
+        with mock.patch.dict(os.environ, cfg, clear=True):
+            s = Settings()
+            self.assertEqual(s.post_timelimit, timeout)
+            self.assertIsNone(s.rollbar_token)
+        # set our standard arguments
+
+    def test_redis_config_override(self):
+        """Test that we can use rediscloud_url or redis_url with priority."""
+        cloud_url = "redis://user:pass@127.0.0.1:7000/1"
+        local_url = "redis://user:pass@localhost:6379/1"
+        cfg = {
+            "autobot_post_timelimit": "1",
+            "autobot_user_agent": "a-user-agent",
+            "autobot_enforce_timelimit": "true",
+            "autobot_reddit_username": "username",
+            "autobot_reddit_password": "password",
+            "autobot_subreddit": "nosleep",
+            "autobot_client_id": "client-id",
+            "autobot_client_secret": "client-secret",
+            "redis_url": local_url
+        }
+        with mock.patch.dict(os.environ, cfg, clear=True):
+            s = Settings()
+            self.assertEqual(s.redis_url, local_url)
+            del os.environ["redis_url"]
+
+            # NB Python 3.x dict is ordered
+            os.environ["rediscloud_url"] = cloud_url
+            os.environ["redis_url"] = local_url
+            t = Settings()
+            self.assertEqual(t.redis_url, cloud_url)
