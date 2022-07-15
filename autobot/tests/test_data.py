@@ -3,7 +3,7 @@ import unittest
 import walrus
 import fakeredis
 
-from bot import AutoBotBaseModel, AutoBotSubmission
+from autobot.bot import AutoBotBaseModel, AutoBotSubmission
 
 
 class TestDataMethods(unittest.TestCase):
