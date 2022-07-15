@@ -9,4 +9,4 @@ jobs:
           command: |
             pip install -r requirements.txt
             pip install fakeredis
-            python -m unittest test_bot test_data
+            python -m unittest discover autobot/tests

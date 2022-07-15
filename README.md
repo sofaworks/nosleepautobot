@@ -124,13 +124,13 @@ pip install -r requirements.txt
 The bot has a set of unit tests in `test_bot.py` which can be executed with:
 
 ```
-python -m unittest test_bot
+python -m unittest autobot.tests.test_bot
 ```
 
 Your tests should pass!
 
 ```
-(venv) nosleepautobot [master] > python -m unittest test_bot
+(venv) nosleepautobot [master] > python -m unittest autobot.tests.test_bot
 ...............
 ----------------------------------------------------------------------
 Ran 15 tests in 0.005s
@@ -142,5 +142,5 @@ There are also a small set of tests meant to ensure that the Redis portions of c
 
 ```
 pip install fakeredis
-python -m unittest test_data
+python -m unittest autobot.tests.test_data
 ```
