@@ -4,7 +4,7 @@
 
 | Branch | Status |
 |--------|--------|
-| `production` | [![CircleCI Production branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/production) |
+| `heroku` | [![CircleCI Heroku branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/heroku.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/heroku) |
 | `master` | [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master) |
 
 ## What is NoxBot?
@@ -46,20 +46,24 @@ NoxBot was written by reddit user [`/u/SofaAssassin`](https://np.reddit.com/u/So
 
 NoxBot is scheduled to **run every 2 minutes**. When it runs, it checks the last hour's worth of posts. It also has a caching mechanism in the background that ensures it won't double-count things or do extra work. If the process running NoxBot ever dies, it will automatically restart, so hopefully this will prevent it from being flaky or unresilient.
 
-NoxBot is hosted on and run from **Heroku**, utilizes **Redis** for caching, is continuously deployed via **CircleCI**, and has informational/error logging with **PaperTrail** and **Rollbar**.
+NoxBot is hosted on and run from **Heroku** (off the `heroku` branch), utilizes **Redis** for caching, is continuously deployed via **CircleCI**, and has informational/error logging with **PaperTrail** and **Rollbar**.
 
 ## What if I have problems or new feature ideas?
 
-If you have any issues with NoxBot or feature/enhancement requests, it is best to PM either /u/Himekat or /u/SofaAssassin, or make an issue on [NoxBot's Github Issues](https://github.com/sofaworks/nosleepautobot/issues) page.
+If you have any issues with NoxBot or feature/enhancement requests, please make an issue on [NoxBot's Github Issues](https://github.com/sofaworks/nosleepautobot/issues) page.
+
+If your issue is not getting attention, please tag or assign the issue to @leikahing as he will likely take care of it.
+
+If you really need critical attention, please PM /u/Himekat or /u/SofaAssassin on Reddit.
 
 ## How to install and run NoxBot?
 _Running NoxBot assumes you already have done the [Reddit OAuth2 quickstart](https://github.com/reddit/reddit/wiki/OAuth2-Quick-Start-Example)_
 
-NoxBot is written in and tested with Python 3.8. After you have checked out the source code, you can do the following to start the bot.
+NoxBot is written in and tested with Python 3.9+. After you have checked out the source code, you can do the following to start the bot.
 
 ```
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 
 pip install -r requirements.txt
 
@@ -103,15 +107,15 @@ In case anyone wants to write code for NoxBot (or just as a reminder to me).
 
 **Python 2.x support has been removed as Python 2.x [has been EOL'ed as of January 1, 2020](https://www.python.org/doc/sunset-python-2/).**
 
-python3's `venv` module is highly recommended. This codebase has been written and tested against Python 3.8.
+python3's `venv` module is highly recommended.
 
 Set up would look akin to this...
 
 ```
 git clone git@github.com:sofaworks/nosleepautobot.git
 cd nosleepautobot
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
