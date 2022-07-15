@@ -116,31 +116,27 @@ git clone git@github.com:sofaworks/nosleepautobot.git
 cd nosleepautobot
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+
+# We use a dev version of the requirements.txt which includes
+# all production reqs and some dev-specific modules
+pip install -r requirements.dev.txt
 ```
 
 ### Running Unit Tests
 
-The bot has a set of unit tests in `test_bot.py` which can be executed with:
+The bot has a set of unit tests in `autobot/tests` which can be executed with:
 
 ```
-python -m unittest autobot.tests.test_bot
+python -m unittest discover autobot/tests
 ```
 
 Your tests should pass!
 
 ```
-(venv) nosleepautobot [master] > python -m unittest autobot.tests.test_bot
-...............
+(venv) nosleepautobot [master] > python -m unittest discover autobot/tests
+..................
 ----------------------------------------------------------------------
-Ran 15 tests in 0.005s
+Ran 18 tests in 0.005s
 
 OK
-```
-
-There are also a small set of tests meant to ensure that the Redis portions of code work correctly. To run these tests, do the following:
-
-```
-pip install fakeredis
-python -m unittest autobot.tests.test_data
 ```
