@@ -17,10 +17,12 @@ import ast
 import os
 import re
 
+from autobot.models import AutoBotBase, AutoBotSubmission
+
 import rollbar
 from rollbar.logger import RollbarHandler
 import praw
-from walrus import Walrus, Model, TextField, IntegerField, BooleanField
+from walrus import Walrus
 
 
 USER_AGENT = 'user_agent'
@@ -42,36 +44,6 @@ ROLLBAR_ENVIRONMENT = 'rollbar_environment'
 class NoSuchFlairError(Exception):
     """Custom exception class when a flair doesn't exist."""
     pass
-
-
-class AutoBotBaseModel(Model):
-    __database__ = None
-    __namespace__ = 'autobot'
-
-    @classmethod
-    def set_database(cls, db):
-        cls.__database__ = db
-
-
-class AutoBotSubmission(AutoBotBaseModel):
-    submission_id = TextField(primary_key=True)
-    author = TextField(index=True)
-    submission_time = IntegerField()
-    is_series = BooleanField()
-    sent_series_pm = BooleanField()
-    deleted = BooleanField()
-
-    @classmethod
-    def set_ttl(cls, submission, ttl=86400):
-        submission.to_hash().expire(ttl=ttl)
-
-    def set_index_ttls(self, ttl=86400):
-        '''Kind of a hacky way to get index keys to expire since they
-        are normally created without any TTL whatsoever.'''
-        for mi in self._indexes:
-            for index in mi.get_indexes():
-                key = index.get_key(index.field_value(self)).key
-                self.__database__.expire(key, ttl)
 
 
 FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
@@ -658,7 +630,7 @@ def transform_and_roll_out():
     # This is hack-city, but since we're constructing the redis data
     # after the fact, we'll now bolt the database back into the baseclass
     walrus = Walrus(host=configuration[REDIS_URL], port=configuration[REDIS_PORT], password=configuration[REDIS_PASSWORD])
-    AutoBotBaseModel.set_database(walrus)
+    AutoBotBase.set_database(walrus)
 
     bot = AutoBot(configuration)
     bot.run(args.forever, args.interval)

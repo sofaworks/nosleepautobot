@@ -3,7 +3,7 @@ import unittest
 import walrus
 import fakeredis
 
-from autobot.bot import AutoBotBaseModel, AutoBotSubmission
+from autobot.models import AutoBotBase, AutoBotSubmission
 
 
 class TestDataMethods(unittest.TestCase):
@@ -12,7 +12,10 @@ class TestDataMethods(unittest.TestCase):
         walrus.Walrus.__bases__ = (fakeredis.FakeStrictRedis,)
         self.redis_server = fakeredis.FakeServer()
         self.r = walrus.Walrus(server=self.redis_server)
-        AutoBotBaseModel.set_database(self.r)
+        AutoBotBase.set_database(self.r)
+
+    def tearDown(self):
+        AutoBotBase.set_database(None)
 
     def test_model(self):
         obj = AutoBotSubmission(
