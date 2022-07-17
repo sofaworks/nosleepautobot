@@ -1,4 +1,4 @@
 from . import models
 
-AutoBotBase = models.AutoBotBase
-AutoBotSubmission = models.AutoBotSubmission
+Submission = models.Submission
+SubmissionHandler = models.SubmissionHandler

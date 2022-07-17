@@ -164,10 +164,10 @@ class TestBotMethods(TestCase):
             "autobot_subreddit": "nosleep",
             "autobot_client_id": "client-id",
             "autobot_client_secret": "client-secret",
-            "redis_url": "redis://user:pass@localhost:6379/1"
+            "redis_url": "redis://localhost:6379"
         }
         with mock.patch.dict(os.environ, cfg, clear=True):
-            s = Settings()
+            s = Settings(_env_file=None)
             self.assertEqual(s.post_timelimit, timeout)
             self.assertIsNone(s.rollbar_token)
         # set our standard arguments
@@ -188,12 +188,12 @@ class TestBotMethods(TestCase):
             "redis_url": local_url
         }
         with mock.patch.dict(os.environ, cfg, clear=True):
-            s = Settings()
+            s = Settings(_env_file=None)
             self.assertEqual(s.redis_url, local_url)
             del os.environ["redis_url"]
 
             # NB Python 3.x dict is ordered
             os.environ["rediscloud_url"] = cloud_url
             os.environ["redis_url"] = local_url
-            t = Settings()
+            t = Settings(_env_file=None)
             self.assertEqual(t.redis_url, cloud_url)

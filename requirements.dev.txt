@@ -1,3 +1,4 @@
 -r requirements.txt
 fakeredis
 flake8
+mypy

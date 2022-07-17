@@ -90,6 +90,7 @@ The bot reads the following environment variables for configuration.
 
 | Setting Name | Description | Required? |
 | ------------ | ----------- | --------- |
+| `DEVELOPMENT_MODE` | Bot runs in dev mode and doesn't do 'live' things against reddit. | No (**default**: `False`) |
 | `AUTOBOT_USER_AGENT` | User agent string for the bot | Yes |
 | `AUTOBOT_POST_TIMELIMIT` | Time limit between allowed posts in seconds | No (**default**: `86400`) |
 | `AUTOBOT_REDDIT_USERNAME` | Username the bot authenticates as | Yes |
