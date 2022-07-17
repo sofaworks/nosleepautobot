@@ -1,31 +1,40 @@
-from walrus import BooleanField, IntegerField, Model, TextField, Walrus
+from datetime import datetime
+from typing import Iterable, Iterator
+import json
+
+from pydantic import BaseModel
+import redis
 
 
-class AutoBotBase(Model):
-    __database__ = None
-    __namespace__ = 'autobot'
+class Submission(BaseModel):
+    id: str
+    author: str
+    submitted: datetime
+    series: bool = False
+    sent_series_pm: bool = False
+    deleted: bool = False
 
-    @classmethod
-    def set_database(cls, db: Walrus) -> None:
-        cls.__database__ = db
+    class Config:
+        json_encoders = {
+            datetime: lambda _: int(_.timestamp())
+        }
 
 
-class AutoBotSubmission(AutoBotBase):
-    submission_id = TextField(primary_key=True)
-    author = TextField(index=True)
-    submission_time = IntegerField()
-    is_series = BooleanField()
-    sent_series_pm = BooleanField()
-    deleted = BooleanField()
+class SubmissionHandler:
+    def __init__(self, rd: redis.Redis) -> None:
+        self.rd = rd
 
-    @classmethod
-    def set_ttl(cls, submission: 'AutoBotSubmission', ttl: int) -> None:
-        submission.to_hash().expire(ttl=ttl)
+    def persist(self, sub: Submission, ttl: int | None = None) -> None:
+        self.rd.set(sub.id, sub.json(), ex=ttl)
 
-    def set_index_ttls(self, ttl: int) -> None:
-        '''Kind of a hacky way to get index keys to expire since they
-        are normally created without any TTL whatsoever.'''
-        for mi in self._indexes:
-            for index in mi.get_indexes():
-                key = index.get_key(index.field_value(self)).key
-                self.__database__.expire(key, ttl)
+    def update(self, sub: Submission) -> None:
+        """Updates entry and preserves the key TTL."""
+        self.rd.set(sub.id, sub.json(), keepttl=True)
+
+    def get(self, sid: str) -> Submission | None:
+        if t := self.rd.get("sid"):
+            return Submission(**json.loads(t))
+        return None
+
+    def get_many(self, ids: Iterable[str]) -> Iterator[Submission]:
+        return (_ for _ in self.rd.mget(ids) if _)

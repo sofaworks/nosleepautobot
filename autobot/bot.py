@@ -14,14 +14,14 @@ import time
 import sys
 import re
 
-from autobot.models import AutoBotBase, AutoBotSubmission
+from autobot.models import Submission, SubmissionHandler
 from autobot.config import Settings
 
 import praw
+import redis
 import rollbar
 
 from rollbar.logger import RollbarHandler
-from walrus import Walrus
 
 
 class NoSuchFlairError(Exception):
@@ -221,8 +221,9 @@ def collect_formatting_issues(post_body):
 
 
 class AutoBot:
-    def __init__(self, cfg: Settings):
+    def __init__(self, cfg: Settings, hnd: SubmissionHandler):
         self.cfg = cfg
+        self.hnd = hnd
         self.reddit = praw.Reddit(
                 user_agent=self.cfg.user_agent,
                 client_id=self.cfg.client_id,
@@ -232,6 +233,7 @@ class AutoBot:
         )
         self.subreddit = self.reddit.subreddit(self.cfg.subreddit)
 
+        logging.info(f"Development mode on? {self.cfg.development_mode}")
         logging.info(f"Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(
             self.subreddit.display_name,
             self.cfg.enforce_timelimit,
@@ -240,13 +242,6 @@ class AutoBot:
 
         if not self.subreddit.user_is_moderator:
             raise AssertionError(f"User {self.cfg.reddit_username} is not moderator of subreddit {self.subreddit.display_name}")
-
-    def get_previous_submission_record(self, submission):
-        try:
-            post = AutoBotSubmission.get(AutoBotSubmission.submission_id == submission.id)
-            return post
-        except Exception:
-            return None
 
     def reject_submission_by_timelimit(self, submission):
         """Determine if a submission should be removed based on a time-limit
@@ -374,7 +369,6 @@ class AutoBot:
 
         return ''.join(final_message)
 
-
     def process_posts(self, restrict_to_sub: bool = True):
         cache_ttl = self.cfg.post_timelimit * 2
 
@@ -394,29 +388,30 @@ class AutoBot:
 
         for p in posts:
             logging.info("Processing submission {0}.".format(p.id))
-            obj = self.get_previous_submission_record(p)
-            if obj:
+            if self.cfg.development_mode:
+                logging.info("DEVELOPMENT MODE set. Not mutating post.")
+                continue
+
+            if sub := self.hnd.get(p.id):
                 logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
                 # Do processing on previous submissions to see if we need to add the series message
                 # if we saw this before and it's not a series but then later flaired as one, send
                 # the message
-                if not obj.is_series and (p.link_flair_text == 'Series'):
+                if not sub.series and p.link_flair_text == 'Series':
                     logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(p.id))
-                    obj.is_series = True
+                    sub.series = True
                     self.post_series_reminder(p)
-                    obj.save()
+                    self.hnd.update(sub)
             else:
-                obj = AutoBotSubmission(
-                        submission_id=p.id,
+                sub = Submission(
+                        id=p.id,
                         author=p.author.name,
-                        submission_time=int(p.created_utc),
-                        is_series=False,
-                        sent_series_pm=False,
-                        deleted=False)
+                        submitted=p.created_utc
+                )
 
                 if self.cfg.enforce_timelimit and self.reject_submission_by_timelimit(p):
                     self.process_time_limit_message(p)
-                    obj.deleted = True
+                    sub.deleted = True
                 else:
                     # Here we want all the formatting and tag issues
                     formatting_issues = collect_formatting_issues(p.selftext)
@@ -431,7 +426,7 @@ class AutoBot:
                         com = p.reply(message)
                         com.mod.distinguish()
                         p.mod.remove()
-                        obj.deleted = True
+                        sub.deleted = True
                     elif post_tags['valid_tags']:
                         if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
                             # This was the final story, so don't make a post or send a PM
@@ -445,33 +440,26 @@ class AutoBot:
                                 logging.info("Problem sending message to {}: {}".format(p.author.name, repr(e)))
                             # Post the remindme bot message
                             self.post_series_reminder(p)
-                            obj.sent_series_pm = True
+                            sub.sent_series_pm = True
 
                         # set the series flair for this post
                         try:
                             self.set_submission_flair(p, flair='flair-series')
                         except Exception as e:
                             logging.exception("Unexpected problem setting flair for {0}: {1}".format(p.id, str(e)))
-
-                        obj.is_series = True
+                        sub.series = True
                     else:
                         # We had no tags at all.
                         logging.info("No tags found in post title.")
 
                         # Check if this submission has flair
                         if p.link_flair_text == 'Series':
-                            obj.is_series = True
+                            sub.series = True
                             self.post_series_reminder(p)
 
 
                 logging.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))
-                obj.save()
-
-                # Save for double the TTL in case Reddit's API returns things out
-                # of the search date range
-                AutoBotSubmission.set_ttl(obj, cache_ttl)
-                obj.set_index_ttls(cache_ttl)
-
+                self.hnd.persist(sub, ttl=cache_ttl)
 
     def run(self, forever=False, interval=300):
         """Run the autobot to find posts. Can be specified to run `forever`
@@ -520,12 +508,11 @@ def transform_and_roll_out():
     if settings.rollbar_token:
         init_rollbar(settings.rollbar_token, settings.rollbar_env)
 
-    # This is hack-city, but since we're constructing the redis data
-    # after the fact, we'll now bolt the database back into the baseclass
-    walrus = Walrus.from_url(settings.redis_url)
-    AutoBotBase.set_database(walrus)
+    logging.info(f"Using redis({settings.redis_url}) for redis")
+    rd = redis.Redis.from_url(settings.redis_url)
 
-    bot = AutoBot(settings)
+    hd = SubmissionHandler(rd)
+    bot = AutoBot(settings, hd)
     bot.run(args.forever, args.interval)
 
 
