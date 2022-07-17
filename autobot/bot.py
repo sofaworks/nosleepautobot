@@ -4,15 +4,16 @@ from collections.abc import Iterator
 from collections import namedtuple
 from operator import attrgetter
 from string import Template
-import itertools
-import traceback
-import urllib.parse
 import argparse
+import itertools
 import logging
-import urllib.request, urllib.parse, urllib.error
-import time
-import sys
 import re
+import sys
+import time
+import traceback
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from autobot.models import Submission, SubmissionHandler
 from autobot.config import Settings
@@ -22,6 +23,9 @@ import redis
 import rollbar
 
 from rollbar.logger import RollbarHandler
+
+
+PrawSubmissionIter = Iterator[praw.models.Submission]
 
 
 class NoSuchFlairError(Exception):
@@ -220,98 +224,126 @@ def collect_formatting_issues(post_body):
             contains_codeblocks(paragraphs))
 
 
+class SubredditTool:
+    def __init__(self, cfg: Settings) -> None:
+        self.reddit = praw.Reddit(
+                user_agent=cfg.user_agent,
+                client_id=cfg.client_id,
+                client_secret=cfg.client_secret,
+                username=cfg.reddit_username,
+                password=cfg.reddit_password
+        )
+        self.subreddit = self.reddit.subreddit(cfg.subreddit)
+        if not self.subreddit.user_is_moderator:
+            raise AssertionError(
+                    f"User {cfg.reddit_username} is not moderator of "
+                    f"subreddit {self.subreddit.display_name}"
+            )
+
+    def _get_submissions(
+        self,
+        query: str,
+        time_filter: str,
+        *,
+        syntax: str = "lucene",
+        sort: str = "new"
+    ) -> PrawSubmissionIter:
+        r = self.subreddit.search(
+            query, time_filter=time_filter, syntax=syntax, sort=sort
+        )
+        return r
+
+    def get_recent_posts(self) -> PrawSubmissionIter:
+        """Get most recent submissions from the subreddit - right now it
+        fetches the last hour's worth of results."""
+        logging.info("Retrieving submissions from the last hour")
+        return self._get_submissions(
+            f"subreddit:{self.subreddit.display_name}",
+            time_filter="hour",
+        )
+
+    def get_redditor_posts(
+        self,
+        redditor: praw.models.Redditor
+    ) -> PrawSubmissionIter:
+        """Retrieve the data from the API of all the posts made by this author
+        in the last 24 hours. This has to be done via cloudsearch because
+        Reddit apparently doesn't enable semantic hyphening in their lucene
+        indexes, so user names with hyphens in them will return improper
+        results."""
+        return self._get_submissions(
+            f'author:"{redditor.name}"',
+            time_filter="day",
+            syntax="cloudsearch"
+        )
+        #logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
+        #                 len(search_results), redditor.name, self.subreddit.display_name))
+
+    def subreddit_name(self) -> str:
+        return self.subreddit.display_name
+
+
+
 class AutoBot:
     def __init__(self, cfg: Settings, hnd: SubmissionHandler):
         self.cfg = cfg
         self.hnd = hnd
-        self.reddit = praw.Reddit(
-                user_agent=self.cfg.user_agent,
-                client_id=self.cfg.client_id,
-                client_secret=self.cfg.client_secret,
-                username=self.cfg.reddit_username,
-                password=self.cfg.reddit_password
-        )
-        self.subreddit = self.reddit.subreddit(self.cfg.subreddit)
+        self.reddit = SubredditTool(cfg)
 
         logging.info(f"Development mode on? {self.cfg.development_mode}")
-        logging.info(f"Moderating: {0}. Enforcing time limits? {1}. Time limit? {2} seconds".format(
-            self.subreddit.display_name,
+        logging.info("Moderating: {}. Enforcing time limits? {}. Time limit? {} seconds".format(
+            self.cfg.subreddit,
             self.cfg.enforce_timelimit,
             self.cfg.post_timelimit
         ))
 
-        if not self.subreddit.user_is_moderator:
-            raise AssertionError(f"User {self.cfg.reddit_username} is not moderator of subreddit {self.subreddit.display_name}")
-
-    def reject_submission_by_timelimit(self, submission):
+    def reject_submission_by_timelimit(
+        self,
+        post: praw.models.Submission
+    ) -> bool:
         """Determine if a submission should be removed based on a time-limit
         for submissions for a subreddit."""
-
         now = int(time.time())
 
-        # We get submissions in ascending order (so, oldest ones first from last hour).
-        # We want to find the most recent post (as in the oldest timestamp)
-        user_posts = self.get_last_subreddit_submissions(submission.author)
+        most_recent = min(
+            self.reddit.get_redditor_posts(post.author),
+            key=attrgetter("created_utc"),
+            default=None
+        )
 
-        try:
-            most_recent = min(user_posts, key=lambda i: i.created_utc)
-        except ValueError:
-            # probably means user_posts was empty...which would be super weird.
-            most_recent = None
-
-        if most_recent and (most_recent.id != submission.id):
+        if most_recent and most_recent.id != post.id:
             next_post_allowed_time = most_recent.created_utc + self.cfg.post_timelimit
             if next_post_allowed_time > now:
-                logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(submission.id, submission.author.name))
+                logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(post.id, post.author.name))
                 return True
 
         return False
 
-    def get_recent_submissions(self) -> Iterator[praw.models.Submission]:
-        """Get most recent submissions from the subreddit - right now it
-        fetches the last hour's worth of results."""
-        logging.info("Retrieving submissions from the last hour")
-        posts = self.subreddit.search(
-            f'subreddit:{self.subreddit.display_name}',
-            time_filter='hour',
-            syntax='lucene',
-            sort='new'
-        )
-        return posts
-
-    def get_last_subreddit_submissions(self, redditor, sort='new'):
-        # Retrieve the data from the API of all the posts made by this author in the last 24 hours.
-        # This has to be done via cloudsearch because Reddit apparently doesn't enable
-        # semantic hyphening in their lucene indexes, so user names with hyphens in them
-        # will return improper results.
-        search_results = list(self.subreddit.search('author:"{0}"'.format(redditor.name), time_filter='day', syntax='cloudsearch', sort=sort))
-        logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
-                         len(search_results), redditor.name, self.subreddit.display_name))
-        return search_results
-
-    def process_time_limit_message(self, submission):
+    def process_time_limit_message(self, post: praw.models.Submission) -> None:
 
         # Because it's hard to determine if something's actually been
         # deleted, this has to just find the most recent posts by the user
         # from the last day.
-        user_posts = self.get_last_subreddit_submissions(submission.author)
-        most_recent = min(user_posts, key=lambda i: i.created_utc)
+        most_recent = min(
+            self.reddit.get_redditor_posts(post.author),
+            key=attrgetter("created_utc"),
+            default=None
+        )
 
-        logging.info("Previous post by {0} was at: {1}".format(submission.author, most_recent.created_utc))
-        logging.info("Current post by {0} was at: {1}".format(submission.author, submission.created_utc))
-        time_to_next_post = self.cfg.post_timelimit - (submission.created_utc - most_recent.created_utc)
+        logging.info("Previous post by {0} was at: {1}".format(post.author, most_recent.created_utc))
+        logging.info("Current post by {0} was at: {1}".format(post.author, post.created_utc))
+        time_to_next_post = self.cfg.post_timelimit - (post.created_utc - most_recent.created_utc)
+        human_fmt = englishify_time(time_to_next_post)
+        logging.info(f"Notifying {post.author} to post again in {human_fmt}")
 
-        logging.info("Notifying {0} to post again in {1}".format(submission.author, englishify_time(time_to_next_post)))
-
-        components = [POST_A_DAY_MESSAGE.safe_substitute(time_remaining=englishify_time(time_to_next_post)),
-                      BOT_DESCRIPTION.safe_substitute(subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name))]
+        components = [POST_A_DAY_MESSAGE.safe_substitute(time_remaining=human_fmt),
+                      BOT_DESCRIPTION.safe_substitute(subreddit_mail_uri=generate_modmail_link(self.reddit.subreddit_name))]
 
         fmt_msg = ''.join(components)
 
-        mod_comment = submission.reply(fmt_msg)
+        mod_comment = post.reply(fmt_msg)
         mod_comment.mod.distinguish()
-        submission.mod.remove()
-
+        post.mod.remove()
 
     def post_series_reminder(self, submission):
         series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Got issues? Click [here]({})."
@@ -352,7 +384,7 @@ class AutoBot:
                     final_message.append(CODEBLOCK_MESSAGE)
         else:
             if any(formatting_issues):
-                modmail_link = generate_modmail_link(self.subreddit.display_name,
+                modmail_link = generate_modmail_link(self.reddit.subreddit_name,
                                                      'Please reapprove submission',
                                                      generate_reapproval_message(post.shortlink))
 
@@ -365,7 +397,7 @@ class AutoBot:
                 final_message.append(FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
 
         final_message.append(BOT_DESCRIPTION.safe_substitute(
-            subreddit_mail_uri=generate_modmail_link(self.subreddit.display_name)))
+            subreddit_mail_uri=generate_modmail_link(self.reddit.subreddit_name)))
 
         return ''.join(final_message)
 
@@ -375,7 +407,7 @@ class AutoBot:
         # for all submissions, check to see if any of them should be rejected based on the time limit
         # Get all recent submissions and then sort them into ascending order
         # As each submission is processed, check it against a user's new posts in descending posted order
-        posts = sorted(self.get_recent_submissions(), key=attrgetter('created_utc'))
+        posts = sorted(self.reddit.get_recent_posts(), key=attrgetter('created_utc'))
 
         logging.info(f"Found {len(posts)} submissions in /r/{self.subreddit.display_name} from the last hour.")
 
@@ -460,6 +492,7 @@ class AutoBot:
 
                 logging.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))
                 self.hnd.persist(sub, ttl=cache_ttl)
+
 
     def run(self, forever=False, interval=300):
         """Run the autobot to find posts. Can be specified to run `forever`
