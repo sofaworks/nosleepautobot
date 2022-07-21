@@ -20,6 +20,8 @@ import rollbar
 
 PrawSubmissionIter = Iterator[praw.models.Submission]
 
+logger = logging.getLogger("autobot")
+
 
 class MissingFlairException(Exception):
     """Custom exception class when a flair doesn't exist."""
@@ -250,7 +252,7 @@ class SubredditTool:
     def get_recent_posts(self) -> PrawSubmissionIter:
         """Get most recent submissions from the subreddit - right now it
         fetches the last hour's worth of results."""
-        logging.info("Retrieving submissions from the last hour")
+        logger.info("Retrieving submissions from the last hour")
         return self._get_posts(
             f"subreddit:{self.subreddit.display_name}",
             time_filter="hour",
@@ -278,7 +280,7 @@ class SubredditTool:
         if not self.read_only:
             post.mod.remove()
         else:
-            logging.info("Running in DEVELOPMENT MODE - not deleting post")
+            logger.info("Running in DEVELOPMENT MODE - not deleting post")
 
     def add_comment(
         self,
@@ -297,7 +299,7 @@ class SubredditTool:
             if lock:
                 rsp.mod.lock()
         else:
-            logging.info("Running in DEVELOPMENT MODE - not adding comment")
+            logger.info("Running in DEVELOPMENT MODE - not adding comment")
 
     def set_series_flair(
         self,
@@ -320,7 +322,7 @@ class SubredditTool:
                 f"subreddit /r/{self.subreddit_name}"
             )
         else:
-            logging.info("Running in DEVELOPMENT MODE - not flairing post")
+            logger.info("Running in DEVELOPMENT MODE - not flairing post")
 
 
 class AutoBot:
@@ -329,8 +331,8 @@ class AutoBot:
         self.hnd = hnd
         self.reddit = SubredditTool(cfg)
 
-        logging.info(f"Development mode on? {self.cfg.development_mode}")
-        logging.info(
+        logger.info(f"Development mode on? {self.cfg.development_mode}")
+        logger.info(
             f"Moderating: {self.cfg.subreddit}. "
             f"Enforcing time limits? {self.cfg.enforce_timelimit}. "
             f"Time limit? {self.cfg.post_timelimit} seconds."
@@ -353,7 +355,7 @@ class AutoBot:
         if most_recent and most_recent.id != post.id:
             allowed_when = most_recent.created_utc + self.cfg.post_timelimit
             if allowed_when > now:
-                logging.info(
+                logger.info(
                     f"Rejecting submission {post.id} "
                     f"by /u/{post.author.name} due to time limit"
                 )
@@ -372,11 +374,11 @@ class AutoBot:
         )
 
         if most_recent:
-            logging.info(f"Previous post by {post.author} was at: {most_recent.created_utc}")
-            logging.info(f"Current post by {post.author} was at: {post.created_utc}")
+            logger.info(f"Previous post by {post.author} was at: {most_recent.created_utc}")
+            logger.info(f"Current post by {post.author} was at: {post.created_utc}")
             time_to_next_post = self.cfg.post_timelimit - (post.created_utc - most_recent.created_utc)
             human_fmt = englishify_time(time_to_next_post)
-            logging.info(f"Notifying {post.author} to post again in {human_fmt}")
+            logger.info(f"Notifying {post.author} to post again in {human_fmt}")
 
             components = [
                 POST_A_DAY_MESSAGE.safe_substitute(time_remaining=human_fmt),
@@ -454,25 +456,25 @@ class AutoBot:
         # As each submission is processed, check it against a user's new posts in descending posted order
         posts = sorted(self.reddit.get_recent_posts(), key=attrgetter('created_utc'))
 
-        logging.info(f"Found {len(posts)} submissions in /r/{self.reddit.subreddit_name()} from the last hour.")
+        logger.info(f"Found {len(posts)} submissions in /r/{self.reddit.subreddit_name()} from the last hour.")
 
         # prevent issue 102 from happening
         if restrict_to_sub:
             bad, posts = partition(lambda _: _.subreddit.display_name == self.reddit.subreddit_name(), posts)
             inv = " ".join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
             if inv:
-                logging.warn(f"Search returned posts from other subs! {inv}")
+                logger.warn(f"Search returned posts from other subs! {inv}")
 
         for p in posts:
-            logging.info("Processing submission {0}.".format(p.id))
+            logger.info("Processing submission {0}.".format(p.id))
 
             if sub := self.hnd.get(p.id):
-                logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
+                logger.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
                 # Do processing on previous submissions to see if we need to add the series message
                 # if we saw this before and it's not a series but then later flaired as one, send
                 # the message
                 if not sub.series and p.link_flair_text == 'Series':
-                    logging.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(p.id))
+                    logger.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(p.id))
                     sub.series = True
                     self.post_series_reminder(p)
                     self.hnd.update(sub)
@@ -494,8 +496,8 @@ class AutoBot:
 
                     if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
                         # We have bad tags or a bad title! Delete post and send PM.
-                        if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                        if any(title_issues): logging.info("Title issues found")
+                        if post_tags['invalid_tags']: logger.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
+                        if any(title_issues): logger.info("Title issues found")
                         msg = self.prepare_delete_message(p, formatting_issues, post_tags['invalid_tags'], title_issues)
                         self.reddit.add_comment(p, msg, distinguish=True, sticky=True)
                         self.reddit.delete_post(p)
@@ -503,14 +505,14 @@ class AutoBot:
                     elif post_tags['valid_tags']:
                         if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
                             # This was the final story, so don't make a post or send a PM
-                            logging.info("Final tag found, not sending PM/posting")
+                            logger.info("Final tag found, not sending PM/posting")
                         else:
                             # We have series tags in place. Send a PM
-                            logging.info("Series tags found")
+                            logger.info("Series tags found")
                             try:
                                 p.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=p.shortlink), None)
                             except Exception as e:
-                                logging.info("Problem sending message to {}: {}".format(p.author.name, repr(e)))
+                                logger.info("Problem sending message to {}: {}".format(p.author.name, repr(e)))
                             # Post the remindme bot message
                             self.post_series_reminder(p)
                             sub.sent_series_pm = True
@@ -520,11 +522,11 @@ class AutoBot:
                         try:
                             self.reddit.set_series_flair(p)
                         except Exception as e:
-                            logging.exception("Unexpected problem setting flair for {0}: {1}".format(p.id, str(e)))
+                            logger.exception("Unexpected problem setting flair for {0}: {1}".format(p.id, str(e)))
                         sub.series = True
                     else:
                         # We had no tags at all.
-                        logging.info("No tags found in post title.")
+                        logger.info("No tags found in post title.")
 
                         # Check if this submission has flair
                         if p.link_flair_text == 'Series':
@@ -532,7 +534,7 @@ class AutoBot:
                             self.post_series_reminder(p)
 
 
-                logging.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))
+                logger.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))
                 self.hnd.persist(sub, ttl=cache_ttl)
 
 
@@ -546,7 +548,7 @@ class AutoBot:
             try:
                 self.process_posts()
             except Exception:
-                logging.exception("bot:run")
+                logger.exception("bot:run")
                 rollbar.report_exc_info()
 
             if not forever:
@@ -554,5 +556,5 @@ class AutoBot:
 
             sleep_interval = float(interval) - ((time.time() - bot_start_time) % float(interval))
 
-            logging.info(f"Sleeping for {sleep_interval} seconds until next run.")
+            logger.info(f"Sleeping for {sleep_interval} seconds until next run.")
             time.sleep(sleep_interval)
