@@ -465,9 +465,6 @@ class AutoBot:
 
         for p in posts:
             logging.info("Processing submission {0}.".format(p.id))
-            if self.cfg.development_mode:
-                logging.info("DEVELOPMENT MODE set. Not mutating post.")
-                continue
 
             if sub := self.hnd.get(p.id):
                 logging.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
