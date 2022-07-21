@@ -32,7 +32,7 @@ class SubmissionHandler:
         self.rd.set(sub.id, sub.json(), keepttl=True)
 
     def get(self, sid: str) -> Submission | None:
-        if t := self.rd.get("sid"):
+        if t := self.rd.get(sid):
             return Submission(**json.loads(t))
         return None
 
