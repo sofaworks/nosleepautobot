@@ -148,7 +148,7 @@ class TestBotMethods(TestCase):
         import datetime
         td = datetime.timedelta(days=1, hours=3, minutes=30, seconds=30)
 
-        time_string = bot.englishify_time(td.total_seconds())
+        time_string = bot.englishify_time(int(td.total_seconds()))
 
         self.assertEqual(time_string, "27 hours, 30 minutes, 30 seconds")
 

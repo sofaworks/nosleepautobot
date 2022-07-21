@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from collections import namedtuple
 from operator import attrgetter
 from string import Template
-import argparse
 import itertools
 import logging
 import re
-import sys
 import time
-import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -19,18 +16,14 @@ from autobot.models import Submission, SubmissionHandler
 from autobot.config import Settings
 
 import praw
-import redis
 import rollbar
-
-from rollbar.logger import RollbarHandler
-
 
 PrawSubmissionIter = Iterator[praw.models.Submission]
 
 
-class NoSuchFlairError(Exception):
+class MissingFlairException(Exception):
     """Custom exception class when a flair doesn't exist."""
-    pass
+    ...
 
 
 FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
@@ -110,13 +103,6 @@ def partition(cond, it):
     return itertools.filterfalse(cond, x), filter(cond, y)
 
 
-def create_argparser():
-    parser = argparse.ArgumentParser(prog='bot.py')
-    parser.add_argument('--forever', required=False, action='store_true', help='If specified, runs bot forever.')
-    parser.add_argument('-i', '--interval', required=False, type=int, default=300, help='How many seconds to wait between bot execution cycles. Only used if "forever" is specified.')
-    return parser
-
-
 def generate_reapproval_message(post_url):
     return ('[My post]({0}) to /r/NoSleep was removed for '
             'formatting issues. I have fixed those issues and '
@@ -148,7 +134,7 @@ def check_valid_title(title):
     return title_issues
 
 
-def categorize_tags(title):
+def categorize_tags(title: str) -> Mapping[str, Iterable[str]]:
     """Parses tags out of the post title
     Valid submission tags are things between [], {}, (), and ||
 
@@ -162,7 +148,10 @@ def categorize_tags(title):
     * Finale
     """
 
-    tag_cats = {'valid_tags': [], 'invalid_tags': []}
+    tag_cats: Mapping[str, list[str]] = {
+        "valid_tags": [],
+        "invalid_tags": []
+    }
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
     allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
@@ -180,30 +169,34 @@ def categorize_tags(title):
     return tag_cats
 
 
-def englishify_time(seconds):
-    '''Converts seconds  into a string describing how long it is in hours/minutes/seconds'''
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
+def englishify_time(seconds: int) -> str:
+    """Converts seconds into a string describing how long it is in hours/minutes/seconds"""
+    hours, minutes = divmod(seconds, 3600)
+    minutes, seconds = divmod(minutes, 60)
 
-    return '{0} hours, {1} minutes, {2} seconds'.format(int(hours), int(minutes), int(seconds))
+    return f"{hours} hours, {minutes} minutes, {seconds} seconds"
 
 
-def paragraphs_too_long(paragraphs, max_word_count=350):
+def paragraphs_too_long(
+    paragraphs: Iterable[str],
+    max_word_count: int = 350
+) -> bool:
     for p in paragraphs:
         if max_word_count < len(re.findall(r'\w+', p)):
             return True
     return False
 
 
-def title_contains_nsfw(title):
-    if not title: return False
+def title_contains_nsfw(title: str | None) -> bool:
+    if not title:
+        return False
     remap_chars = '{}[]()|.!?$*@#'
-    exclude_map = {ord(c) : ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))}
+    exclude_map = {ord(c): ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))}
     parts = title.lower().translate(exclude_map).split(' ')
     return any('nsfw' == x.strip() for x in parts)
 
 
-def contains_codeblocks(paragraphs):
+def contains_codeblocks(paragraphs: Iterable[str]) -> bool:
     for _, p in enumerate(paragraphs):
         # this determines if the line is not just all whitespace and then
         # whether or not it contains the 4 spaces or tab characters, which
@@ -213,7 +206,7 @@ def contains_codeblocks(paragraphs):
     return False
 
 
-def collect_formatting_issues(post_body):
+def collect_formatting_issues(post_body: str) -> FormattingIssues:
     # split the post body by paragraphs
     # Things that are considered 'paragraphs' are:
     # * A newline followed by some arbitrary number of spaces followed by a newline
@@ -226,21 +219,22 @@ def collect_formatting_issues(post_body):
 
 class SubredditTool:
     def __init__(self, cfg: Settings) -> None:
+        self.read_only = cfg.development_mode
         self.reddit = praw.Reddit(
-                user_agent=cfg.user_agent,
-                client_id=cfg.client_id,
-                client_secret=cfg.client_secret,
-                username=cfg.reddit_username,
-                password=cfg.reddit_password
+            user_agent=cfg.user_agent,
+            client_id=cfg.client_id,
+            client_secret=cfg.client_secret,
+            username=cfg.reddit_username,
+            password=cfg.reddit_password
         )
         self.subreddit = self.reddit.subreddit(cfg.subreddit)
-        if not self.subreddit.user_is_moderator:
+        if not self.read_only and not self.subreddit.user_is_moderator:
             raise AssertionError(
                     f"User {cfg.reddit_username} is not moderator of "
-                    f"subreddit {self.subreddit.display_name}"
+                    f"subreddit {self.subreddit.display_name}."
             )
 
-    def _get_submissions(
+    def _get_posts(
         self,
         query: str,
         time_filter: str,
@@ -257,7 +251,7 @@ class SubredditTool:
         """Get most recent submissions from the subreddit - right now it
         fetches the last hour's worth of results."""
         logging.info("Retrieving submissions from the last hour")
-        return self._get_submissions(
+        return self._get_posts(
             f"subreddit:{self.subreddit.display_name}",
             time_filter="hour",
         )
@@ -271,17 +265,62 @@ class SubredditTool:
         Reddit apparently doesn't enable semantic hyphening in their lucene
         indexes, so user names with hyphens in them will return improper
         results."""
-        return self._get_submissions(
+        return self._get_posts(
             f'author:"{redditor.name}"',
             time_filter="day",
             syntax="cloudsearch"
         )
-        #logging.info("Found {0} submissions by user {1} in /r/{2} in last 24 hours".format(
-        #                 len(search_results), redditor.name, self.subreddit.display_name))
 
     def subreddit_name(self) -> str:
         return self.subreddit.display_name
 
+    def delete_post(self, post: praw.models.Submission) -> None:
+        if not self.read_only:
+            post.mod.remove()
+        else:
+            logging.info("Running in DEVELOPMENT MODE - not deleting post")
+
+    def add_comment(
+        self,
+        post: praw.models.Submission,
+        msg: str,
+        *,
+        sticky: bool = False,
+        distinguish: bool = False,
+        lock: bool = False
+    ) -> None:
+        """Make a comment on the provided post."""
+        if not self.read_only:
+            rsp = post.reply(msg)
+            dis = "yes" if distinguish else "no"
+            rsp.mod.distinguish(how=dis, sticky=sticky)
+            if lock:
+                rsp.mod.lock()
+        else:
+            logging.info("Running in DEVELOPMENT MODE - not adding comment")
+
+    def set_series_flair(
+        self,
+        post: praw.models.Submission,
+        *,
+        name: str = "flair-series"
+    ) -> None:
+        """Set the series flair for a post."""
+        if not self.read_only:
+            for f in post.flair.choices():
+                if f["flair_css_class"].lower() == name.lower():
+                    try:
+                        post.flair.select(f["flair_template_id"])
+                        return
+                    except KeyError:
+                        # This shouldn't happen
+                        raise
+            raise MissingFlairException(
+                f"Flair class {name} not found for "
+                f"subreddit /r/{self.subreddit_name}"
+            )
+        else:
+            logging.info("Running in DEVELOPMENT MODE - not flairing post")
 
 
 class AutoBot:
@@ -291,11 +330,11 @@ class AutoBot:
         self.reddit = SubredditTool(cfg)
 
         logging.info(f"Development mode on? {self.cfg.development_mode}")
-        logging.info("Moderating: {}. Enforcing time limits? {}. Time limit? {} seconds".format(
-            self.cfg.subreddit,
-            self.cfg.enforce_timelimit,
-            self.cfg.post_timelimit
-        ))
+        logging.info(
+            f"Moderating: {self.cfg.subreddit}. "
+            f"Enforcing time limits? {self.cfg.enforce_timelimit}. "
+            f"Time limit? {self.cfg.post_timelimit} seconds."
+        )
 
     def reject_submission_by_timelimit(
         self,
@@ -303,7 +342,7 @@ class AutoBot:
     ) -> bool:
         """Determine if a submission should be removed based on a time-limit
         for submissions for a subreddit."""
-        now = int(time.time())
+        now = time.time()
 
         most_recent = min(
             self.reddit.get_redditor_posts(post.author),
@@ -312,63 +351,69 @@ class AutoBot:
         )
 
         if most_recent and most_recent.id != post.id:
-            next_post_allowed_time = most_recent.created_utc + self.cfg.post_timelimit
-            if next_post_allowed_time > now:
-                logging.info("Rejecting submission {0} by /u/{1} due to time limit".format(post.id, post.author.name))
+            allowed_when = most_recent.created_utc + self.cfg.post_timelimit
+            if allowed_when > now:
+                logging.info(
+                    f"Rejecting submission {post.id} "
+                    f"by /u/{post.author.name} due to time limit"
+                )
                 return True
 
         return False
 
     def process_time_limit_message(self, post: praw.models.Submission) -> None:
-
-        # Because it's hard to determine if something's actually been
-        # deleted, this has to just find the most recent posts by the user
-        # from the last day.
+        """Because it's hard to determine if something's actually been
+        deleted, this has to just find the most recent posts by the user
+        from the last day."""
         most_recent = min(
             self.reddit.get_redditor_posts(post.author),
             key=attrgetter("created_utc"),
             default=None
         )
 
-        logging.info("Previous post by {0} was at: {1}".format(post.author, most_recent.created_utc))
-        logging.info("Current post by {0} was at: {1}".format(post.author, post.created_utc))
-        time_to_next_post = self.cfg.post_timelimit - (post.created_utc - most_recent.created_utc)
-        human_fmt = englishify_time(time_to_next_post)
-        logging.info(f"Notifying {post.author} to post again in {human_fmt}")
+        if most_recent:
+            logging.info(f"Previous post by {post.author} was at: {most_recent.created_utc}")
+            logging.info(f"Current post by {post.author} was at: {post.created_utc}")
+            time_to_next_post = self.cfg.post_timelimit - (post.created_utc - most_recent.created_utc)
+            human_fmt = englishify_time(time_to_next_post)
+            logging.info(f"Notifying {post.author} to post again in {human_fmt}")
 
-        components = [POST_A_DAY_MESSAGE.safe_substitute(time_remaining=human_fmt),
-                      BOT_DESCRIPTION.safe_substitute(subreddit_mail_uri=generate_modmail_link(self.reddit.subreddit_name))]
+            components = [
+                POST_A_DAY_MESSAGE.safe_substitute(time_remaining=human_fmt),
+                BOT_DESCRIPTION.safe_substitute(
+                    subreddit_mail_uri=generate_modmail_link(
+                        self.reddit.subreddit_name
+                    )
+                )
+            ]
 
-        fmt_msg = ''.join(components)
+            fmt_msg = ''.join(components)
 
-        mod_comment = post.reply(fmt_msg)
-        mod_comment.mod.distinguish()
-        post.mod.remove()
+            self.reddit.add_comment(post, fmt_msg, distinguish=True)
+            self.reddit.delete_post(post)
 
-    def post_series_reminder(self, submission):
+    def post_series_reminder(self, post: praw.models.Submission) -> None:
         series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Got issues? Click [here]({})."
 
-        message_url = "https://www.reddit.com/message/compose/?to=UpdateMeBot&subject=Subscribe&message=SubscribeMe%21%20%2Fr%2Fnosleep%20%2Fu%2F{}".format(str(submission.author))
+        message_url = "https://www.reddit.com/message/compose/?to=UpdateMeBot&subject=Subscribe&message=SubscribeMe%21%20%2Fr%2Fnosleep%20%2Fu%2F{}".format(str(post.author))
         issues_url = "https://www.reddit.com/r/nosleep/wiki/nosleepautobot"
 
-        series_comment = series_message.format(message_url, issues_url)
-        comment = submission.reply(series_comment)
-        comment.mod.distinguish(sticky=True)
-        comment.mod.lock()
+        msg = series_message.format(message_url, issues_url)
+        self.reddit.add_comment(
+            post,
+            msg,
+            distinguish=True,
+            sticky=True,
+            lock=True
+        )
 
-    def set_submission_flair(self, submission, flair):
-        """Set a flair for a submission."""
-        for f in submission.flair.choices():
-            if f['flair_css_class'].lower() == flair.lower():
-                try:
-                    submission.flair.select(f['flair_template_id'])
-                    return
-                except KeyError:
-                    # Huh, that's weird, our flair doesn't have the key we expected
-                    raise
-        raise NoSuchFlairError("Flair class {0} not found for subreddit /r/{1}".format(flair, self.subreddit.display_name))
-
-    def prepare_delete_message(self, post, formatting_issues, invalid_tags, title_issues):
+    def prepare_delete_message(
+        self,
+        post: praw.models.Submission,
+        formatting_issues,
+        invalid_tags,
+        title_issues
+    ) -> str:
         final_message = []
         if invalid_tags or any(title_issues):
             final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
@@ -409,12 +454,12 @@ class AutoBot:
         # As each submission is processed, check it against a user's new posts in descending posted order
         posts = sorted(self.reddit.get_recent_posts(), key=attrgetter('created_utc'))
 
-        logging.info(f"Found {len(posts)} submissions in /r/{self.subreddit.display_name} from the last hour.")
+        logging.info(f"Found {len(posts)} submissions in /r/{self.reddit.subreddit_name()} from the last hour.")
 
         # prevent issue 102 from happening
         if restrict_to_sub:
-            bad, posts = partition(lambda _: _.subreddit.display_name == self.subreddit.display_name, posts)
-            inv  = ' '.join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
+            bad, posts = partition(lambda _: _.subreddit.display_name == self.reddit.subreddit_name(), posts)
+            inv = " ".join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
             if inv:
                 logging.warn(f"Search returned posts from other subs! {inv}")
 
@@ -436,9 +481,9 @@ class AutoBot:
                     self.hnd.update(sub)
             else:
                 sub = Submission(
-                        id=p.id,
-                        author=p.author.name,
-                        submitted=p.created_utc
+                    id=p.id,
+                    author=p.author.name,
+                    submitted=p.created_utc
                 )
 
                 if self.cfg.enforce_timelimit and self.reject_submission_by_timelimit(p):
@@ -454,10 +499,9 @@ class AutoBot:
                         # We have bad tags or a bad title! Delete post and send PM.
                         if post_tags['invalid_tags']: logging.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
                         if any(title_issues): logging.info("Title issues found")
-                        message = self.prepare_delete_message(p, formatting_issues, post_tags['invalid_tags'], title_issues)
-                        com = p.reply(message)
-                        com.mod.distinguish()
-                        p.mod.remove()
+                        msg = self.prepare_delete_message(p, formatting_issues, post_tags['invalid_tags'], title_issues)
+                        self.reddit.add_comment(p, msg, distinguish=True, sticky=True)
+                        self.reddit.delete_post(p)
                         sub.deleted = True
                     elif post_tags['valid_tags']:
                         if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
@@ -475,8 +519,9 @@ class AutoBot:
                             sub.sent_series_pm = True
 
                         # set the series flair for this post
+                        self.reddit.set_series_flair(p)
                         try:
-                            self.set_submission_flair(p, flair='flair-series')
+                            self.reddit.set_series_flair(p)
                         except Exception as e:
                             logging.exception("Unexpected problem setting flair for {0}: {1}".format(p.id, str(e)))
                         sub.series = True
@@ -494,7 +539,7 @@ class AutoBot:
                 self.hnd.persist(sub, ttl=cache_ttl)
 
 
-    def run(self, forever=False, interval=300):
+    def run(self, forever: bool = False, interval: int = 300):
         """Run the autobot to find posts. Can be specified to run `forever`
         at `interval` seconds per run."""
 
@@ -512,42 +557,5 @@ class AutoBot:
 
             sleep_interval = float(interval) - ((time.time() - bot_start_time) % float(interval))
 
-            logging.info("Sleeping for {0} seconds until next run.".format(sleep_interval))
+            logging.info(f"Sleeping for {sleep_interval} seconds until next run.")
             time.sleep(sleep_interval)
-
-
-def uncaught_ex_handler(ex_type, value, tb):
-    logging.critical('Got an uncaught exception')
-    logging.critical(''.join(traceback.format_tb(tb)))
-    logging.critical('{0}: {1}'.format(ex_type, value))
-
-
-def init_rollbar(token: str, environment: str) -> None:
-    rollbar.init(token, environment)
-    rollbar_handler = RollbarHandler()
-    rollbar_handler.setLevel(logging.ERROR)
-    logging.getLogger('').addHandler(rollbar_handler)
-
-
-def transform_and_roll_out():
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-    sys.excepthook = uncaught_ex_handler
-
-    parser = create_argparser()
-    args = parser.parse_args()
-
-    settings = Settings()
-
-    if settings.rollbar_token:
-        init_rollbar(settings.rollbar_token, settings.rollbar_env)
-
-    logging.info(f"Using redis({settings.redis_url}) for redis")
-    rd = redis.Redis.from_url(settings.redis_url)
-
-    hd = SubmissionHandler(rd)
-    bot = AutoBot(settings, hd)
-    bot.run(args.forever, args.interval)
-
-
-if __name__ == '__main__':
-    transform_and_roll_out()
