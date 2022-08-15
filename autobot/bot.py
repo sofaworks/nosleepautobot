@@ -28,7 +28,10 @@ class MissingFlairException(Exception):
     ...
 
 
-FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeblocks'])
+FormattingIssues = namedtuple(
+    'FormattingIssues',
+    ['long_paragraphs', 'has_codeblocks']
+)
 TitleIssues = namedtuple('TitleIssues', ['title_contains_nsfw'])
 
 
@@ -64,8 +67,8 @@ def categorize_tags(title: str) -> Mapping[str, Iterable[str]]:
     }
 
     # this regex might be a little too heavy-handed but it does support the valid tag formats
-    allowed_tag_values = re.compile("^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
-    matches = [m.group() for m in re.finditer("\[([^]]*)\]|\((.*?)\)|\{(.*?)\}|\|(.*?)\|", title)]
+    allowed_tag_values = re.compile(r"^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
+    matches = [m.group() for m in re.finditer(r"\[([^]]*)\]|\((.*?)\)|\{(.*?)\}|\|(.*?)\|", title)]
     # for each match check if it's in the accepted list of tags
 
     for m in matches:
@@ -102,7 +105,9 @@ def title_contains_nsfw(title: str | None) -> bool:
     if not title:
         return False
     remap_chars = '{}[]()|.!?$*@#'
-    exclude_map = {ord(c): ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))}
+    exclude_map = {
+        ord(c): ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))
+    }
     parts = title.lower().translate(exclude_map).split(' ')
     return any('nsfw' == x.strip() for x in parts)
 
@@ -120,7 +125,8 @@ def contains_codeblocks(paragraphs: Iterable[str]) -> bool:
 def collect_formatting_issues(post_body: str) -> FormattingIssues:
     # split the post body by paragraphs
     # Things that are considered 'paragraphs' are:
-    # * A newline followed by some arbitrary number of spaces followed by a newline
+    # * A newline followed by some arbitrary number of spaces
+    #   followed by a newline
     # * At least two instances of whitespace followed by a newline
     paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n|\t\n)', post_body)
     return FormattingIssues(
@@ -241,7 +247,9 @@ class SubredditTool:
             if lock:
                 rsp.mod.lock()
         else:
-            logger.info(f"Running in DEVELOPMENT MODE - not adding comment: '{msg}'")
+            logger.info(
+                f"Running in DEVELOPMENT MODE - not adding comment: '{msg}'"
+            )
 
     def set_series_flair(
         self,
@@ -286,9 +294,6 @@ class SubredditTool:
         if message:
             q["message"] = message
         return self.gen_compose_url(q)
-
-    def send_repproval_message(self, post_url: str):
-        ...
 
 
 class AutoBot:
@@ -356,11 +361,18 @@ class AutoBot:
         )
 
         if most_recent:
-            logger.info(f"Previous post by {post.author} was at: {most_recent.created_utc}")
-            logger.info(f"Current post by {post.author} was at: {post.created_utc}")
-            time_to_next_post = self.cfg.post_timelimit - (post.created_utc - most_recent.created_utc)
+            logger.info(
+                f"Previous post by {post.author} was at: "
+                f"{most_recent.created_utc}"
+            )
+            logger.info(
+                f"Current post by {post.author} was at: "
+                f"{post.created_utc}"
+            )
+            time_diff = post.created_utc - most_recent.created_utc
+            time_to_next_post = self.cfg.post_timelimit - time_diff
             human_fmt = englishify_time(time_to_next_post)
-            logger.info(f"Notifying {post.author} to post again in {human_fmt}")
+            logger.info(f"Notify {post.author} to post again in {human_fmt}")
 
             msg = self.msg_bld.create_post_a_day_msg(
                 human_fmt,
@@ -403,16 +415,26 @@ class AutoBot:
     def process_posts(self, restrict_to_sub: bool = True):
         cache_ttl = self.cfg.post_timelimit * 2
 
-        # for all submissions, check to see if any of them should be rejected based on the time limit
+        # for all submissions, check to see if any of them should be rejected
+        # based on the time limit.
         # Get all recent submissions and then sort them into ascending order
-        # As each submission is processed, check it against a user's new posts in descending posted order
-        posts = sorted(self.reddit.get_recent_posts(), key=attrgetter('created_utc'))
+        # As each submission is processed, check it against a user's new posts
+        # in descending posted order
+        posts = sorted(
+            self.reddit.get_recent_posts(),
+            key=attrgetter('created_utc')
+        )
 
-        logger.info(f"Found {len(posts)} submissions in /r/{self.reddit.subreddit_name()} from the last hour.")
+        logger.info(
+            f"Found {len(posts)} submissions in "
+            f"/r/{self.reddit.subreddit_name()} from the last hour.")
 
         # prevent issue 102 from happening
         if restrict_to_sub:
-            bad, posts = partition(lambda _: _.subreddit.display_name == self.reddit.subreddit_name(), posts)
+            bad, posts = partition(
+                lambda _: _.subreddit.display_name == self.reddit.subreddit_name(),
+                posts
+            )
             inv = " ".join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
             if inv:
                 logger.warn(f"Search returned posts from other subs! {inv}")
@@ -422,12 +444,18 @@ class AutoBot:
 
             post_series_comment = False
             if sub := self.hnd.get(p.id):
-                logger.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
-                # Do processing on previous submissions to see if we need to add the series message
-                # if we saw this before and it's not a series but then later flaired as one, send
-                # the message
+                logger.info(
+                    f"Submission {p.id} was previously processed. "
+                    "Doing previous submission checks."
+                )
+                # Do processing on previous submissions to see if we need to
+                # add the series message if we saw this before and it's not a
+                # series but then later flaired as one, send the message
                 if not sub.series and p.link_flair_text == 'Series':
-                    logger.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(p.id))
+                    logger.info(
+                        f"Submission {p.id} was flaired 'Series' after the "
+                        "fact. Posting series message."
+                    )
                     sub.series = True
                     post_series_comment = True
                     self.hnd.update(sub)
@@ -438,7 +466,8 @@ class AutoBot:
                     submitted=p.created_utc
                 )
 
-                if self.cfg.enforce_timelimit and self.reject_submission_by_timelimit(p):
+                if (self.cfg.enforce_timelimit and
+                        self.reject_submission_by_timelimit(p)):
                     self.process_time_limit_message(p)
                     sub.deleted = True
                 else:
@@ -447,18 +476,34 @@ class AutoBot:
                     title_issues = check_valid_title(p.title)
                     post_tags = categorize_tags(p.title)
 
-                    if post_tags['invalid_tags'] or any(title_issues) or any(formatting_issues):
-                        # We have bad tags or a bad title! Delete post and send PM.
-                        if post_tags['invalid_tags']: logger.info("Bad tags found: {0}".format(post_tags['invalid_tags']))
-                        if any(title_issues): logger.info("Title issues found")
-                        msg = self.prepare_delete_message(p, formatting_issues, post_tags['invalid_tags'], title_issues)
-                        self.reddit.add_comment(p, msg, distinguish=True, sticky=True)
+                    if (post_tags['invalid_tags']
+                            or any(title_issues)
+                            or any(formatting_issues)):
+                        # We have bad (tags|title) - Delete post and send PM.
+                        if post_tags['invalid_tags']:
+                            logger.info(f"Bad tags found: {post_tags['invalid_tags']}")
+                        if any(title_issues):
+                            logger.info("Title issues found")
+                        msg = self.prepare_delete_message(
+                                p,
+                                formatting_issues,
+                                post_tags['invalid_tags'],
+                                title_issues
+                        )
+                        self.reddit.add_comment(
+                                p,
+                                msg,
+                                distinguish=True,
+                                sticky=True
+                        )
                         self.reddit.delete_post(p)
                         sub.deleted = True
                     elif post_tags['valid_tags']:
-                        if 'final' in (tag.lower() for tag in post_tags['valid_tags']):
-                            # This was the final story, so don't make a post or send a PM
-                            logger.info("Final tag found, not sending PM/posting")
+                        tags = [tag.lower() for tag in post_tags["valid_tags"]]
+                        if 'final' in tags:
+                            # This was the final story, so don't make a post
+                            # or send a PM
+                            logger.info("Final tag found, not posting/DMing.")
                         else:
                             # We have series tags in place. Send a PM
                             logger.info("Series tags found, sending PM.")
@@ -486,10 +531,11 @@ class AutoBot:
                     series_comment = self.gen_series_reminder(p)
                     self.reddit.post_series_reminder(p, series_comment)
 
-
-                logger.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))
+                logger.info(
+                    f"Caching metadata for submission {p.id} "
+                    f"for {cache_ttl} seconds"
+                )
                 self.hnd.persist(sub, ttl=cache_ttl)
-
 
     def run(self, forever: bool = False, interval: int = 300):
         """Run the autobot to find posts. Can be specified to run `forever`
@@ -507,7 +553,8 @@ class AutoBot:
             if not forever:
                 break
 
-            sleep_interval = float(interval) - ((time.time() - bot_start_time) % float(interval))
+            run_interval = (time.time() - bot_start_time) % float(interval)
+            sleep_interval = float(interval) - run_interval
 
-            logger.info(f"Sleeping for {sleep_interval} seconds until next run.")
+            logger.info(f"Sleeping {sleep_interval} seconds until next run.")
             time.sleep(sleep_interval)
