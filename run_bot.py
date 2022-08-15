@@ -5,7 +5,7 @@ import logging
 import sys
 import traceback
 
-from autobot.bot import AutoBot
+from autobot.autobot import AutoBot
 from autobot.config import Settings
 from autobot.models import SubmissionHandler
 from autobot.util.messages.templater import MessageBuilder

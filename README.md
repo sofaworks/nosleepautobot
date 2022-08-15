@@ -59,7 +59,7 @@ If you really need critical attention, please PM /u/Himekat or /u/SofaAssassin o
 ## How to install and run NoxBot?
 _Running NoxBot assumes you already have done the [Reddit OAuth2 quickstart](https://github.com/reddit/reddit/wiki/OAuth2-Quick-Start-Example)_
 
-NoxBot is written in and tested with Python 3.9+. After you have checked out the source code, you can do the following to start the bot.
+NoxBot is written and tested with Python 3.10.x. After you have checked out the source code, you can do the following to start the bot.
 
 ```
 python -m venv .venv
@@ -67,15 +67,15 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-# Copy noxbot.ini.sample to noxbot.ini and modify its values, especially for credentials/authentication.
-python bot.py -c noxbot.ini
+# set your env vars or make an autobot.env file
+python run_bot.py
 ```
 
 ### NoxBot execution flags
 
-NoxBot supports a number of flags for running, just type `python bot.py --help` to display a help message with all the supported flags.
+NoxBot supports a number of flags for running, just type `python run_bot.py --help` to display a help message with all the supported flags.
 
-	usage: bot.py [-h] [-c CONF] [--forever] [-i INTERVAL]
+	usage: run_bot.py [-h] [-c CONF] [--forever] [-i INTERVAL]
 
 	optional arguments:
 	  -h, --help            show this help message and exit
