@@ -1,0 +1,8 @@
+<%doc>
+This is for the comment made on series posts that say there might be more to
+the series and to provide a link to UpdateMeBot
+</%doc>
+
+It looks like there may be more to this story. Click [**here**](${subscribe_url}) to get a reminder to check back later.
+
+Got issues? Click [here for help](https://www.reddit.com/r/nosleep/wiki/nosleepautobot).

@@ -3,7 +3,6 @@
 from collections.abc import Iterable, Iterator, Mapping
 from collections import namedtuple
 from operator import attrgetter
-from string import Template
 import itertools
 import logging
 import re
@@ -12,8 +11,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from autobot.models import Submission, SubmissionHandler
 from autobot.config import Settings
+from autobot.models import Submission, SubmissionHandler
+from autobot.util.messages.templater import MessageBuilder
 
 import praw
 import rollbar
@@ -32,102 +32,10 @@ FormattingIssues = namedtuple('FormattingIssues', ['long_paragraphs', 'has_codeb
 TitleIssues = namedtuple('TitleIssues', ['title_contains_nsfw'])
 
 
-POST_A_DAY_MESSAGE = Template('Hi there! /r/nosleep limits posts to one post per author per day, '
-                      'in order to give all submitters here an equal shot at the front page.\n\n'
-                      'As such, your post has been removed. Feel free to repost your story '
-                      'in **${time_remaining}**.\n\n'
-                      'Confused? See the [mod announcement](http://www.reddit.com/r/NoSleepOOC/comments/1m1spe/rule_addition_one_days_spacing_between_nosleep/) '
-                      'on the subject for more information. If you believe your post was removed in error, please '
-                      '[message the moderators](http://www.reddit.com/message/compose?to=%2Fr%2Fnosleep).'
-                      )
-
-PERMANENT_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been removed from /r/nosleep '
-                                    'for violating the following rules:')
-
-TEMPORARY_REMOVED_POST_HEADER = Template('Hi there! [Your post](${post_url}) has been **temporarily** '
-                                    'removed from /r/nosleep due to the following formatting issues '
-                                    'detected in your post:')
-
-DISALLOWED_TAGS_MESSAGE = ('\n\n* **Invalid Tags**\n\n'
-                           '  /r/nosleep has strict rules about tags in story titles:\n\n'
-                           '  **Tags (example: [True], [real experience]) are not allowed.** '
-                           'The only thing in brackets **[]**, **{}** or parenthesis **()** '
-                           'should be a reference to which "part" of your series the post is. '
-                           '**Example**: (part 1) or [Pt2].')
-
-NSFW_TITLE_MESSAGE = ('\n\n* **Title contains "NSFW"**\n\n'
-                      '  Your post title appears to include **NSFW** in the title. /r/nosleep '
-                      'does not allow **NSFW** to be stated in the title of stories. Stories '
-                      'can be marked **NSFW** after they are posted by click **NSFW** or **Add Trigger Warning** '
-                      '(depending on your UI) at the bottom of the post.')
-
-REPOST_MESSAGE = '\n\n**Since titles cannot be edited on Reddit, please repost your story with a corrected title.**\n\n'
-
-ADDITIONAL_FORMATTING_MESSAGE = ('\n\nAdditionally, the following issues have been detected in your post, '
-                                 'which either violate rules or may make your post unreadable.'
-                                 ' Please correct them when re-posting your story.')
-
-
-SERIES_MESSAGE = Template('Hi there! It looks like you are writing an /r/nosleep series! '
-                  'Awesome! Please be sure to double-check that [your post](${post_url}) '
-                  'has "series" flair and please remember to include a link '
-                  'to the previous part at the top of your story.\n\n'
-                  "Don't know how to add flair? Visit your story's comment page "
-                  'and look underneath the post itself. Click on the **flair** button '
-                  'to bring up a list of options. Choose the "series" option and hit "save"!')
-
-LONG_PARAGRAPH_MESSAGE= ('\n\n* **Long Paragraphs Detected**\n\n'
-                         '  You have one or more paragraphs containing more than 350 words. '
-                         'Please break up your story into smaller paragraphs. You can create paragraphs '
-                         'by pressing `Enter` twice at the end of a line.')
-
-CODEBLOCK_MESSAGE = ('\n\n* **Paragraph with 4 (or more) Starting Spaces Detected**\n\n'
-                     '  You have one or more paragraphs beginning with a tab or four or more spaces.\n\n'
-                     '  On Reddit, lines beginning with a tab or four or more spaces are treated as '
-                     'blocks of code and make your story unreadable. Please remove tabs or spaces at the beginning '
-                     'of paragraphs/lines. You can create paragraphs by pressing `Enter` twice at the end '
-                     'of a line if you haven\'t already done so.')
-
-FORMATTING_CLOSE = Template('\n\n**Once you have fixed your formatting issues, please [click here](${modmail_link}) to request reapproval.** '
-                    'The re-approval process is manual, so send a single request only. Multiple requests '
-                    'do not mean faster approval; in fact they will clog the modqueue and result in '
-                    're-approvals taking even more time.')
-
-BOT_DESCRIPTION = Template('\n\n_I am a bot, and this was automatically posted. '
-                    'Do not reply to me as messages will be ignored. '
-                    'Please [contact the moderators of this subreddit](${subreddit_mail_uri}) '
-                    'if you have any questions, concerns, or bugs to report._')
-
-
 def partition(cond, it):
     """Partition a list in twain based on cond."""
     x, y = itertools.tee(it)
     return itertools.filterfalse(cond, x), filter(cond, y)
-
-
-def generate_reapproval_message(post_url):
-    return ('[My post]({0}) to /r/NoSleep was removed for '
-            'formatting issues. I have fixed those issues and '
-            'am now requesting re-approval.'
-            '\n\n_Note to moderation team: if this story is '
-            'eligible for re-approval, remember to remove '
-            'the bot\'s comment from it._'.format(post_url))
-
-
-def generate_modmail_link(subreddit, subject=None, message=None):
-    base_url = 'https://www.reddit.com/message/compose?'
-    query = {
-                'to': '/r/{0}'.format(subreddit),
-            }
-
-    if subject:
-        query['subject'] = subject
-
-    if message:
-        query['message'] = message
-
-    urllib.parse.urlencode(query)
-    return base_url + urllib.parse.urlencode(query)
 
 
 def check_valid_title(title):
@@ -172,7 +80,8 @@ def categorize_tags(title: str) -> Mapping[str, Iterable[str]]:
 
 
 def englishify_time(seconds: int) -> str:
-    """Converts seconds into a string describing how long it is in hours/minutes/seconds"""
+    """Converts seconds into a string describing how long it is in
+    readable time."""
     hours, minutes = divmod(seconds, 3600)
     minutes, seconds = divmod(minutes, 60)
 
@@ -276,6 +185,39 @@ class SubredditTool:
     def subreddit_name(self) -> str:
         return self.subreddit.display_name
 
+    def send_series_pm(
+        self,
+        post: praw.models.Submission,
+        msg: str
+    ) -> None:
+        if not self.read_only:
+            try:
+                post.author.message(
+                    "Reminder about your series post on r/nosleep",
+                    msg,
+                    None
+                )
+            except Exception as e:
+                logger.info(
+                    f"Problem sending series message to {post.author.name}: "
+                    f"{repr(e)}"
+                )
+        else:
+            logger.info("Running in DEVELOPMENT MODE - not PMing series msg")
+
+    def post_series_reminder(
+        self,
+        post: praw.models.Submission,
+        comment: str
+    ) -> None:
+        self.add_comment(
+            post,
+            comment,
+            distinguish=True,
+            sticky=True,
+            lock=True
+        )
+
     def delete_post(self, post: praw.models.Submission) -> None:
         if not self.read_only:
             post.mod.remove()
@@ -299,7 +241,7 @@ class SubredditTool:
             if lock:
                 rsp.mod.lock()
         else:
-            logger.info("Running in DEVELOPMENT MODE - not adding comment")
+            logger.info(f"Running in DEVELOPMENT MODE - not adding comment: '{msg}'")
 
     def set_series_flair(
         self,
@@ -324,11 +266,41 @@ class SubredditTool:
         else:
             logger.info("Running in DEVELOPMENT MODE - not flairing post")
 
+    def gen_compose_url(self, query: Mapping[str, str]) -> str:
+        qs = urllib.parse.urlencode(query)
+        parts = ("https", "www.reddit.com", "message/compose", qs, None)
+        return urllib.parse.urlunsplit(parts)
+
+    def create_modmail_link(
+        self,
+        subject: str | None = None,
+        message: str | None = None
+    ) -> str:
+        q = {
+            "to": f"/r/{self.subreddit_name()}",
+        }
+
+        if subject:
+            q["subject"] = subject
+
+        if message:
+            q["message"] = message
+        return self.gen_compose_url(q)
+
+    def send_repproval_message(self, post_url: str):
+        ...
+
 
 class AutoBot:
-    def __init__(self, cfg: Settings, hnd: SubmissionHandler):
+    def __init__(
+        self,
+        cfg: Settings,
+        hnd: SubmissionHandler,
+        msg_builder: MessageBuilder
+    ):
         self.cfg = cfg
         self.hnd = hnd
+        self.msg_bld = msg_builder
         self.reddit = SubredditTool(cfg)
 
         logger.info(f"Development mode on? {self.cfg.development_mode}")
@@ -363,6 +335,16 @@ class AutoBot:
 
         return False
 
+    def gen_series_reminder(self, post: praw.models.Submission) -> str:
+        q = {
+            "to": "UpdateMeBot",
+            "subject": "Subscribe",
+            "message": ("SubscribeMe! "
+                        f"/r/{self.reddit.subreddit_name()} /u/{post.author}")
+        }
+        sub_url = self.reddit.gen_compose_url(q)
+        return self.msg_bld.create_series_comment(sub_url)
+
     def process_time_limit_message(self, post: praw.models.Submission) -> None:
         """Because it's hard to determine if something's actually been
         deleted, this has to just find the most recent posts by the user
@@ -380,73 +362,43 @@ class AutoBot:
             human_fmt = englishify_time(time_to_next_post)
             logger.info(f"Notifying {post.author} to post again in {human_fmt}")
 
-            components = [
-                POST_A_DAY_MESSAGE.safe_substitute(time_remaining=human_fmt),
-                BOT_DESCRIPTION.safe_substitute(
-                    subreddit_mail_uri=generate_modmail_link(
-                        self.reddit.subreddit_name
-                    )
-                )
-            ]
+            msg = self.msg_bld.create_post_a_day_msg(
+                human_fmt,
+                self.reddit.create_modmail_link()
+            )
 
-            fmt_msg = ''.join(components)
-
-            self.reddit.add_comment(post, fmt_msg, distinguish=True)
+            self.reddit.add_comment(post, msg, distinguish=True)
             self.reddit.delete_post(post)
-
-    def post_series_reminder(self, post: praw.models.Submission) -> None:
-        series_message = "It looks like there may be more to this story. Click [here]({}) to get a reminder to check back later. Got issues? Click [here]({})."
-
-        message_url = "https://www.reddit.com/message/compose/?to=UpdateMeBot&subject=Subscribe&message=SubscribeMe%21%20%2Fr%2Fnosleep%20%2Fu%2F{}".format(str(post.author))
-        issues_url = "https://www.reddit.com/r/nosleep/wiki/nosleepautobot"
-
-        msg = series_message.format(message_url, issues_url)
-        self.reddit.add_comment(
-            post,
-            msg,
-            distinguish=True,
-            sticky=True,
-            lock=True
-        )
 
     def prepare_delete_message(
         self,
         post: praw.models.Submission,
-        formatting_issues,
-        invalid_tags,
-        title_issues
+        formatting_issues: FormattingIssues,
+        invalid_tags: Iterable[str],
+        title_issues: TitleIssues
     ) -> str:
-        final_message = []
+
+        modmail_link = self.reddit.create_modmail_link()
+        reapproval_link = self.reddit.create_modmail_link(
+                "Please reapprove submission",
+                self.msg_bld.create_approval_msg(post.shortlink)
+        )
+
+        perm_del = False
+
         if invalid_tags or any(title_issues):
-            final_message.append(PERMANENT_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
-            if invalid_tags: final_message.append(DISALLOWED_TAGS_MESSAGE)
-            if title_issues.title_contains_nsfw: final_message.append(NSFW_TITLE_MESSAGE)
-            final_message.append(REPOST_MESSAGE)
-            if any(formatting_issues):
-                final_message.append(ADDITIONAL_FORMATTING_MESSAGE)
+            perm_del = True
 
-                if formatting_issues.long_paragraphs:
-                    final_message.append(LONG_PARAGRAPH_MESSAGE)
-                if formatting_issues.has_codeblocks:
-                    final_message.append(CODEBLOCK_MESSAGE)
-        else:
-            if any(formatting_issues):
-                modmail_link = generate_modmail_link(self.reddit.subreddit_name,
-                                                     'Please reapprove submission',
-                                                     generate_reapproval_message(post.shortlink))
-
-                final_message.append(TEMPORARY_REMOVED_POST_HEADER.safe_substitute(post_url=post.shortlink))
-
-                if formatting_issues.long_paragraphs:
-                    final_message.append(LONG_PARAGRAPH_MESSAGE)
-                if formatting_issues.has_codeblocks:
-                    final_message.append(CODEBLOCK_MESSAGE)
-                final_message.append(FORMATTING_CLOSE.safe_substitute(modmail_link=modmail_link))
-
-        final_message.append(BOT_DESCRIPTION.safe_substitute(
-            subreddit_mail_uri=generate_modmail_link(self.reddit.subreddit_name)))
-
-        return ''.join(final_message)
+        return self.msg_bld.create_deleted_post_msg(
+            post.shortlink,
+            modmail_link=modmail_link,
+            reapproval_modmail=reapproval_link,
+            permanent=perm_del,
+            has_nsfw_title=title_issues.title_contains_nsfw,
+            has_codeblocks=formatting_issues.has_codeblocks,
+            long_paragraphs=formatting_issues.long_paragraphs,
+            invalid_tags=", ".join(invalid_tags)
+        )
 
     def process_posts(self, restrict_to_sub: bool = True):
         cache_ttl = self.cfg.post_timelimit * 2
@@ -468,6 +420,7 @@ class AutoBot:
         for p in posts:
             logger.info("Processing submission {0}.".format(p.id))
 
+            post_series_comment = False
             if sub := self.hnd.get(p.id):
                 logger.info("Submission {0} was previously processed. Doing previous submission checks.".format(p.id))
                 # Do processing on previous submissions to see if we need to add the series message
@@ -476,7 +429,7 @@ class AutoBot:
                 if not sub.series and p.link_flair_text == 'Series':
                     logger.info("Submission {0} was flaired 'Series' after the fact. Posting series message.".format(p.id))
                     sub.series = True
-                    self.post_series_reminder(p)
+                    post_series_comment = True
                     self.hnd.update(sub)
             else:
                 sub = Submission(
@@ -508,21 +461,17 @@ class AutoBot:
                             logger.info("Final tag found, not sending PM/posting")
                         else:
                             # We have series tags in place. Send a PM
-                            logger.info("Series tags found")
-                            try:
-                                p.author.message("Reminder about your series post on r/nosleep", SERIES_MESSAGE.safe_substitute(post_url=p.shortlink), None)
-                            except Exception as e:
-                                logger.info("Problem sending message to {}: {}".format(p.author.name, repr(e)))
+                            logger.info("Series tags found, sending PM.")
+                            self.reddit.send_series_pm(
+                                p,
+                                self.msg_bld.create_series_msg(p.shortlink)
+                            )
                             # Post the remindme bot message
-                            self.post_series_reminder(p)
+                            post_series_comment = True
                             sub.sent_series_pm = True
 
                         # set the series flair for this post
                         self.reddit.set_series_flair(p)
-                        try:
-                            self.reddit.set_series_flair(p)
-                        except Exception as e:
-                            logger.exception("Unexpected problem setting flair for {0}: {1}".format(p.id, str(e)))
                         sub.series = True
                     else:
                         # We had no tags at all.
@@ -531,7 +480,11 @@ class AutoBot:
                         # Check if this submission has flair
                         if p.link_flair_text == 'Series':
                             sub.series = True
-                            self.post_series_reminder(p)
+                            post_series_comment = True
+
+                if post_series_comment:
+                    series_comment = self.gen_series_reminder(p)
+                    self.reddit.post_series_reminder(p, series_comment)
 
 
                 logger.info("Caching metadata for submission {0} for {1} seconds".format(p.id, cache_ttl))

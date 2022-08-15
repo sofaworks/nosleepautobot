@@ -1,0 +1,9 @@
+<%doc>
+This is for the PMs sent to posters if they are writing a series.
+</%doc>
+
+Hi there! It looks like you are writing an /r/nosleep series! Awesome!
+
+Please be sure to double-check that [your post](${post_url}) has "series" flair and please remember to include a link to the previous part at the top of your story.
+                  
+Don't know how to add flair? Visit your [story's comment page](${post_url}) and look underneath the post itself. Click on the **Flair** button to bring up a list of options. Choose the "series" option and hit "Save"!

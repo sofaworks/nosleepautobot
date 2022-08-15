@@ -1,0 +1,8 @@
+<%doc>Message sent to users whose post violates the 24-hour rule.</%doc>
+Hi there! /r/nosleep limits posts to one post per author per day, in order to give all submitters here an equal shot at the front page.
+
+As such, your post has been removed. Feel free to repost your story in **${time_remaining}**.
+
+Confused? See the [mod announcement](http://www.reddit.com/r/NoSleepOOC/comments/1m1spe/rule_addition_one_days_spacing_between_nosleep/) on the subject for more information. If you believe your post was removed in error, please [message the moderators](${modmail_link}).
+
+<%include file="bot_desc.template" />

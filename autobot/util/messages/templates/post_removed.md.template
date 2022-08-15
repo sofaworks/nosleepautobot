@@ -1,0 +1,53 @@
+% if permanent:
+Hi there! [Your story](${post_url}) has been removed from from /r/nosleep for violating the following rules:
+% else:
+Hi there! [Your story]$({post_url}) has been **temporarily** removed from r/nosleep due to the following issues detected in it.
+% endif 
+
+% if invalid_tags:
+* **Invalid Tags**
+
+  The following invalid tags were found in your title: **${invalid_tags}**. 
+  
+  /r/nosleep has strict rules about tags in story titles:
+
+  **Tags such as `[True]` or `[real experience]` are not allowed.** The only thing in brackets **[]**, **{}** or parenthesis **()** should be a reference to which "part" of your series the post is. **For example**: `(part 1)` or `[Pt2]` are allowed tags.
+% endif
+
+% if has_nsfw_title is True:
+* **Title contains "NSFW"**
+
+  Your post title appears to include **NSFW** in the title. /r/nosleep does not allow **NSFW** to be stated in the title of stories. Stories can be marked **NSFW** after they are posted by click **NSFW** or **Add Trigger Warning** (depending on your UI) at the bottom of the post.
+% endif
+
+% if permanent:
+**Since titles cannot be edited on Reddit, please repost your story with a corrected title.**
+% endif
+
+% if long_paragraphs or has_codeblocks:
+  % if permanent:
+Additionally, the following issues were detected in your post, which either violate rules or may make your post unreadable. Please correct them when re-posting your story.
+  % endif
+  
+  % if long_paragraphs:
+* **Long Paragraphs Detected**
+
+  You have one or more paragraphs containing more than 350 words. Please break up your story into smalleer paragraphs. **You can create paragraphs by pressing `Enter` twice at the end of a line.**
+  % endif
+
+  % if has_codeblocks:
+* **Paragraph with 4 (or more) Starting Spaces Detected**
+
+  You have one or more paragraphs beginning with a tab or four or more spaces.
+
+  On Reddit, lines beginning with a tab or four or more spaces are treated as blocks of code and can make your story unreadable. Please remove tabs or spaces at the beginning of paragraphs/lines. You can create paragraphs by pressing `Enter` twice at the end of a line if you haven't already done so.
+  % endif
+
+  % if not permanent:
+**Once you have fixed your formatting issues, please [click here](${reapproval_modmail}) to request reapproval.**
+
+The re-approval process is  manual, so please send only a single request. Multiple requests do not mean faster approval; in fact they will clog the modqueue and result in re-approvals taking even more time.
+  % endif
+% endif
+
+_I am a bot, and this was automatically posted. Do not reply to me as messages will be ignored. Please [contact the moderators of this subreddit](${modmail_link}) if you have any questions, concerns, or bugs to report._
