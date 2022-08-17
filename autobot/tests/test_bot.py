@@ -56,7 +56,7 @@ class TestBotMethods(TestCase):
         analyzer = PostAnalyzer()
         with open(files_dir / "soul_cancer.md", "r") as sc:
             story = sc.read()
-            submission = FakeSubmission(self_text=story)
+            submission = FakeSubmission(selftext=story)
             meta = analyzer.analyze(submission)
             self.assertFalse(meta.has_long_paragraphs)
 
@@ -66,7 +66,7 @@ class TestBotMethods(TestCase):
         analyzer = PostAnalyzer()
         with open(files_dir / "chezecaek.md", "r") as sc:
             story = sc.read()
-            submission = FakeSubmission(self_text=story)
+            submission = FakeSubmission(selftext=story)
             meta = analyzer.analyze(submission)
             self.assertFalse(meta.has_codeblocks)
 
@@ -79,7 +79,7 @@ class TestBotMethods(TestCase):
         text = " ".join(["text"] * 300)
         text += "\n \n"
         text += " ".join(['more'] * 100)
-        meta = analyzer.analyze(FakeSubmission(self_text=text))
+        meta = analyzer.analyze(FakeSubmission(selftext=text))
         self.assertFalse(meta.is_invalid())
 
     def test_contains_codeblocks(self):
