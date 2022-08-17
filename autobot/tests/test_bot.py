@@ -1,154 +1,171 @@
+import datetime
 import os
-from unittest import TestCase, mock
-
+from dataclasses import dataclass
 from pathlib import Path
+from unittest import TestCase, mock
 from urllib.parse import urlparse, parse_qs
 
-import autobot.bot as bot
+from autobot.autobot import englishify_time, PostAnalyzer
 from autobot.config import Settings
+from autobot.util.reddit_util import SubredditTool
+
+
+@dataclass
+class FakeSubmission:
+    title: str = "A reddit title"
+    selftext: str = "A reddit text"
+    link_flair_text: str = ""
 
 
 class TestBotMethods(TestCase):
     def _get_files_dir(self) -> Path:
         return Path(__file__).resolve().parent / "files"
 
-    def test_generate_modmail_link(self):
-        modlink = bot.generate_modmail_link('testsr', 'a title', 'some body')
-        parsed_url = urlparse(modlink)
-
-        query = parse_qs(parsed_url.query)
-
-        # make sure there are to/subject/message qs components
-        self.assertEqual(parsed_url.path, '/message/compose')
-        self.assertTrue('to' in query)
-        self.assertTrue('message' in query)
-        self.assertTrue('subject' in query)
-        self.assertEqual(query['message'][0], 'some body')
-        self.assertEqual(query['subject'][0], 'a title')
-
-    def test_generate_empty_modmail_link(self):
-        modlink = bot.generate_modmail_link('testsr')
-        parsed_url = urlparse(modlink)
-        query = parse_qs(parsed_url.query)
-
-        self.assertFalse('message' in query)
-        self.assertFalse('subject' in query)
-
-    def test_generate_reapproval_message(self):
-        msg = bot.generate_reapproval_message('http://localhost/mail')
-
-        self.assertTrue(msg.startswith('[My post](http://localhost/mail)'))
-
     def test_reject_nsfw_in_title(self):
-        '''Test that the presence of 'nsfw' in titles is a rejection'''
-        self.assertTrue(bot.title_contains_nsfw('blah blah nsfw blah'))
-        self.assertFalse(bot.title_contains_nsfw('NsFw_title_with_spaces'))
-        self.assertTrue(bot.title_contains_nsfw('nsfw leading title'))
-        self.assertTrue(bot.title_contains_nsfw('Title ending with NSFW'))
-        self.assertFalse(bot.title_contains_nsfw('Title without bad words'))
-        self.assertTrue(bot.title_contains_nsfw('Title with an [NSFW] tag'))
-        self.assertTrue(bot.title_contains_nsfw('!NSFW!'))
-        self.assertTrue(bot.title_contains_nsfw('Is this post NSFW?'))
-        self.assertTrue(bot.title_contains_nsfw('Hi [Part 2] [NSFW]'))
+        """Test that the presence of "nsfw" in titles is a rejection"""
+        analyzer = PostAnalyzer()
+        self.assertTrue(analyzer.contains_nsfw_title("blah blah nsfw blah"))
+        self.assertFalse(analyzer.contains_nsfw_title("NsFw_title_in_bars"))
+        self.assertTrue(analyzer.contains_nsfw_title("nsfw leading title"))
+        self.assertTrue(analyzer.contains_nsfw_title("Title ending with NSFW"))
+        self.assertFalse(analyzer.contains_nsfw_title("No bad words"))
+        self.assertTrue(analyzer.contains_nsfw_title("Has an [NSFW] tag"))
+        self.assertTrue(analyzer.contains_nsfw_title("!NSFW!"))
+        self.assertTrue(analyzer.contains_nsfw_title("Is this post NSFW?"))
+        self.assertTrue(analyzer.contains_nsfw_title("Hi [Part 2] [NSFW]"))
 
     def test_reject_long_paragraphs(self):
-        '''This test asserts that paragraphs > (length) words are rejected.'''
-
+        """This test asserts that paragraphs > (length) words are rejected."""
+        analyzer = PostAnalyzer()
         # Basic test with just words
-        text = ' '.join(['text'] * 351)
-        self.assertTrue(bot.paragraphs_too_long([text]))
+        text = " ".join(["text"] * 351)
+        self.assertTrue(analyzer.contains_long_paragraphs([text]))
 
         # More advanced with punctuations and such.
         # In a naive implementation, word counting
         # could be affected by just splitting on spaces
         # and then things like standalone & would be counted.
         # i.e. len(text.split())
-        add_text = ' '.join(['text'] * 349)
-        add_text += '& -- text'
-        self.assertFalse(bot.paragraphs_too_long([add_text]))
+        add_text = " ".join(["text"] * 349)
+        add_text += "& -- text"
+        self.assertFalse(analyzer.contains_long_paragraphs([add_text]))
 
     def test_live_story_paragraphs(self):
         # Soul Cancer initiated issue #13
         files_dir = self._get_files_dir()
+        analyzer = PostAnalyzer()
         with open(files_dir / "soul_cancer.md", "r") as sc:
             story = sc.read()
-            issues = bot.collect_formatting_issues(story)
-            self.assertFalse(issues.long_paragraphs)
+            submission = FakeSubmission(self_text=story)
+            meta = analyzer.analyze(submission)
+            self.assertFalse(meta.has_long_paragraphs)
 
     def test_chezecaek_full_story(self):
         # Chezecaek initiated issue #17
         files_dir = self._get_files_dir()
+        analyzer = PostAnalyzer()
         with open(files_dir / "chezecaek.md", "r") as sc:
             story = sc.read()
-            issues = bot.collect_formatting_issues(story)
-            self.assertFalse(issues.has_codeblocks)
+            submission = FakeSubmission(self_text=story)
+            meta = analyzer.analyze(submission)
+            self.assertFalse(meta.has_codeblocks)
 
     def test_reject_long_paragraphs_funky_newlines(self):
-        '''Test edge case long paragraphs (newlines)'''
+        """Test edge case long paragraphs (newlines)"""
 
         # This test sees if paragraphs that have crappy line breaks
         # are accepted correctly.
-        text = ' '.join(['text'] * 300)
-        text += '\n \n'
-        text += ' '.join(['more'] * 100)
-        issues = bot.collect_formatting_issues(text)
-        self.assertFalse(issues.long_paragraphs)
+        analyzer = PostAnalyzer()
+        text = " ".join(["text"] * 300)
+        text += "\n \n"
+        text += " ".join(['more'] * 100)
+        meta = analyzer.analyze(FakeSubmission(self_text=text))
+        self.assertFalse(meta.is_invalid())
 
     def test_contains_codeblocks(self):
-        '''Test for codeblocks in a message'''
+        """Test for codeblocks in a message"""
 
-        text = '    This starts with four spaces'
-        self.assertTrue(bot.contains_codeblocks([text]))
+        code_opening = " " * 4
+        analyzer = PostAnalyzer()
+        text = f"{code_opening}This starts with four spaces"
+        self.assertTrue(analyzer.contains_codeblocks([text]))
 
-        tab_text = '\tThis starts with a tab'
-        self.assertTrue(bot.contains_codeblocks([tab_text]))
+        tab_text = "\tThis starts with a tab"
+        self.assertTrue(analyzer.contains_codeblocks([tab_text]))
 
-        varied_spaces = '   \tThis has three spaces and a tab'
-        self.assertTrue(bot.contains_codeblocks([varied_spaces]))
+        varied_spaces = "   \tThis has three spaces and a tab"
+        self.assertTrue(analyzer.contains_codeblocks([varied_spaces]))
+        self.assertFalse(analyzer.contains_codeblocks([" " * 8]))
 
-        blank_line_with_spaces = ''.join([' '] * 8)
-        self.assertFalse(bot.contains_codeblocks([blank_line_with_spaces]))
-
-        self.assertFalse(bot.contains_codeblocks(['']))
+        self.assertFalse(analyzer.contains_codeblocks([""]))
 
     def test_categorize_tags(self):
-        title = 'This is a sample post (volume 1) {part 2} |part 3|'
-        tags = bot.categorize_tags(title)
-        self.assertEqual(len(tags['invalid_tags']), 0)
-        self.assertEqual(len(tags['valid_tags']), 3)
-        self.assertEqual(tags['valid_tags'][0], "volume 1")
-        self.assertEqual(tags['valid_tags'][1], "part 2")
-        self.assertEqual(tags['valid_tags'][2], "part 3")
+        title = "This is a sample post (volume 1) {part 2} |part 3|"
+        analyzer = PostAnalyzer()
+        series, final, invalid = analyzer.categorize_tags(title)
+        self.assertEqual(len(invalid), 0, f"Unexpected bad tags: {invalid}")
+        self.assertTrue(series)
+        self.assertFalse(final)
+
+    def test_mixed_series_final(self):
+        """Test that you can have a 'final' and other series tags"""
+        title = "This is a story [pt. 999][final]"
+        analyzer = PostAnalyzer()
+        series, final, bad_tags = analyzer.categorize_tags(title)
+        self.assertTrue(series, "Should be a series but isn't")
+        self.assertTrue(final, "Should be final but isn't")
+        self.assertEqual(len(bad_tags), 0)
+
+    def test_series_numbers(self):
+        """Test that we support numeric and textual part numbers."""
+        title = "Story with numeric and text part numbers [part one][vol. 10]"
+        analyzer = PostAnalyzer()
+        series, final, bad_tags = analyzer.categorize_tags(title)
+        self.assertTrue(series, "Should be a series but isn't")
+        self.assertFalse(final, "Should be final but isn't")
+        self.assertEqual(len(bad_tags), 0, f"Unexpected bad tags: {bad_tags}")
 
     def test_update_tags(self):
-        '''Test that tags like 'Update #3' and 'Update 99' are allowed'''
-        title = 'This is a sample [update #3] [update 100] [update1]'
-        tags = bot.categorize_tags(title)
-        self.assertEqual(len(tags['invalid_tags']), 1)
-        self.assertEqual(len(tags['valid_tags']), 2)
-        self.assertEqual(tags['valid_tags'][0], 'update #3')
-        self.assertEqual(tags['valid_tags'][1], 'update 100')
-        self.assertEqual(tags['invalid_tags'][0], 'update1')
+        """Test that tags like 'Update #3' and 'Update 99' are allowed"""
+        analyzer = PostAnalyzer()
+        title = "This is a sample [update #3] [update 100] [update1]"
+        series, _, bad_tags = analyzer.categorize_tags(title)
+        self.assertEqual(len(bad_tags), 1, f"Unexpected bad tags: {bad_tags}")
+        self.assertTrue(series)
+        self.assertEqual(bad_tags[0], "[update1]")
 
-    def test_additional_categorize_tags(self):
-        title = 'Truckers Have Some of The Best Stories Threads (update)'
-        tags = bot.categorize_tags(title)
-        self.assertEqual(len(tags['invalid_tags']), 0)
+    def test_naked_update_series_tags(self):
+        """Some tags specifically allow you to not specify a number, or you
+        can also have just a number"""
+        title = "Truckers Have Some of The Best Stories (update)(100)[ten]"
+        analyzer = PostAnalyzer()
+        series, final, bad_tags = analyzer.categorize_tags(title)
+        self.assertTrue(series)
+        self.assertFalse(final)
+        self.assertEqual(len(bad_tags), 0)
+
+    def test_wacky_spaced_tags(self):
+        title = "Story with wacky tag spaces ( Vol 1 ) {   PT 2 }| finale  |"
+        analyzer = PostAnalyzer()
+        series, final, bad_tags = analyzer.categorize_tags(title)
+
+        self.assertEqual(len(bad_tags), 0, f"Unexpected bad tags: {bad_tags}")
+        self.assertTrue(series)
+        self.assertTrue(final)
 
     def test_categorize_tags_varying_case(self):
-        title = 'This is a sample post (VoLuME 1) {PT 2}'
-        tags = bot.categorize_tags(title)
+        title = "This is a sample post (VoLuME 1) {PT 2}"
+        analyzer = PostAnalyzer()
+        series, final, bad_tags = analyzer.categorize_tags(title)
 
-        self.assertEqual(len(tags['invalid_tags']), 0)
-        self.assertEqual(len(tags['valid_tags']), 2)
-        self.assertEqual(tags['valid_tags'][0], "volume 1")
-        self.assertEqual(tags['valid_tags'][1], "pt 2")
+        self.assertEqual(len(bad_tags), 0, f"Unexpected bad tags: {bad_tags}")
+        self.assertTrue(series)
+        self.assertFalse(final)
 
     def test_englishify_time(self):
-        import datetime
         td = datetime.timedelta(days=1, hours=3, minutes=30, seconds=30)
 
-        time_string = bot.englishify_time(int(td.total_seconds()))
+        time_string = englishify_time(td.total_seconds())
 
         self.assertEqual(time_string, "27 hours, 30 minutes, 30 seconds")
 
@@ -170,7 +187,6 @@ class TestBotMethods(TestCase):
             s = Settings(_env_file=None)
             self.assertEqual(s.post_timelimit, timeout)
             self.assertIsNone(s.rollbar_token)
-        # set our standard arguments
 
     def test_redis_config_override(self):
         """Test that we can use rediscloud_url or redis_url with priority."""
@@ -197,3 +213,52 @@ class TestBotMethods(TestCase):
             os.environ["redis_url"] = local_url
             t = Settings(_env_file=None)
             self.assertEqual(t.redis_url, cloud_url)
+
+    @mock.patch("praw.Reddit", autospec=True)
+    def test_generate_modmail_link(self, reddit_mock):
+        mock_sr = mock.Mock()
+        mock_sr.display_name = "nosleep"
+
+        reddit_mock.return_value.subreddit = lambda _: mock_sr
+        settings = Settings()
+        settings.development_mode = True
+        settings.user_agent = "hello"
+        settings.client_id = "123"
+        settings.client_secret = "abc"
+        settings.subreddit = "nosleep"
+        settings.reddit_username = "user1"
+        settings.reddit_password = "password"
+        reddit_tool = SubredditTool(settings)
+
+        url = reddit_tool.create_modmail_link("test subject", "save me")
+        parsed_url = urlparse(url)
+        query = parse_qs(parsed_url.query)
+        # make sure there are to/subject/message qs components
+        self.assertEqual(parsed_url.path, "/message/compose")
+        self.assertTrue("to" in query)
+        self.assertTrue("message" in query)
+        self.assertTrue("subject" in query)
+        self.assertEqual(query["message"][0], "save me")
+        self.assertEqual(query["subject"][0], "test subject")
+
+    @mock.patch("praw.Reddit", autospec=True)
+    def test_generate_empty_modmail_link(self, reddit_mock):
+        mock_sr = mock.Mock()
+        mock_sr.display_name = "nosleep"
+
+        reddit_mock.return_value.subreddit = lambda _: mock_sr
+        settings = Settings()
+        settings.development_mode = True
+        settings.user_agent = "hello"
+        settings.client_id = "123"
+        settings.client_secret = "abc"
+        settings.subreddit = "nosleep"
+        settings.reddit_username = "user1"
+        settings.reddit_password = "password"
+        reddit_tool = SubredditTool(settings)
+        modlink = reddit_tool.create_modmail_link()
+        parsed_url = urlparse(modlink)
+        query = parse_qs(parsed_url.query)
+
+        self.assertFalse("message" in query)
+        self.assertFalse("subject" in query)

@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-
-from collections.abc import Iterable, Mapping
-from collections import namedtuple
+from collections.abc import Iterable
+from dataclasses import dataclass
 from operator import attrgetter
+from typing import Tuple
 import itertools
 import logging
 import re
@@ -20,110 +19,145 @@ import rollbar
 logger = logging.getLogger("autobot")
 
 
-FormattingIssues = namedtuple(
-    'FormattingIssues',
-    ['long_paragraphs', 'has_codeblocks']
-)
-TitleIssues = namedtuple('TitleIssues', ['title_contains_nsfw'])
-
-
 def partition(cond, it):
     """Partition a list in twain based on cond."""
     x, y = itertools.tee(it)
     return itertools.filterfalse(cond, x), filter(cond, y)
 
 
-def check_valid_title(title):
-    """Checks if the title contains valid content"""
-    title_issues = TitleIssues(title_contains_nsfw=title_contains_nsfw(title))
-    return title_issues
-
-
-def categorize_tags(title: str) -> Mapping[str, Iterable[str]]:
-    """Parses tags out of the post title
-    Valid submission tags are things between [], {}, (), and ||
-
-    Valid tag values are:
-
-    * a single number (shorthand for part #)
-    * Pt/Pt./Part + number (integral or textual)
-    * Vol/Vol./Volume  + number (integral or textual)
-    * Update
-    * Final
-    * Finale
-    """
-
-    tag_cats: Mapping[str, list[str]] = {
-        "valid_tags": [],
-        "invalid_tags": []
-    }
-
-    # this regex might be a little too heavy-handed but it does support the valid tag formats
-    allowed_tag_values = re.compile(r"^(?:(?:vol(?:\.|ume)?|p(?:ar)?t|pt\.)?\s?(?:[1-9][0-9]?|one|two|three|five|ten|eleven|twelve|fifteen|(?:(?:four|six|seven|eight|nine)(?:teen)?))|finale?|update(?:[ ]#?[0-9]*)?)$")
-    matches = [m.group() for m in re.finditer(r"\[([^]]*)\]|\((.*?)\)|\{(.*?)\}|\|(.*?)\|", title)]
-    # for each match check if it's in the accepted list of tags
-
-    for m in matches:
-        # remove the braces/brackets/parens
-        text = m.lower()[1:-1].strip()
-        if not allowed_tag_values.match(text):
-            tag_cats['invalid_tags'].append(text)
-        else:
-            tag_cats['valid_tags'].append(text)
-
-    return tag_cats
-
-
-def englishify_time(seconds: int) -> str:
+def englishify_time(seconds: float) -> str:
     """Converts seconds into a string describing how long it is in
     readable time."""
-    hours, minutes = divmod(seconds, 3600)
+    i = int(seconds)
+    hours, minutes = divmod(i, 3600)
     minutes, seconds = divmod(minutes, 60)
 
     return f"{hours} hours, {minutes} minutes, {seconds} seconds"
 
 
-def paragraphs_too_long(
-    paragraphs: Iterable[str],
-    max_word_count: int = 350
-) -> bool:
-    for p in paragraphs:
-        if max_word_count < len(re.findall(r'\w+', p)):
-            return True
-    return False
+@dataclass
+class PostMetadata:
+    """Data class for various properties we derive
+    from a post."""
+    has_long_paragraphs: bool = False
+    has_codeblocks: bool = False
+    has_nsfw_title: bool = False
+    is_series: bool = False
+    is_final: bool = False
+    invalid_tags: Iterable[str] | None = None
+
+    def is_invalid(self) -> bool:
+        bad_things = (
+            self.has_long_paragraphs,
+            self.has_codeblocks,
+            self.has_nsfw_title,
+            self.invalid_tags
+        )
+        return any(bad_things)
+
+    def is_serial(self) -> bool:
+        return self.is_series or self.is_final
+
+    def bad_tags(self) -> str:
+        if not self.invalid_tags:
+            return ""
+        return ", ".join(self.invalid_tags)
 
 
-def title_contains_nsfw(title: str | None) -> bool:
-    if not title:
+class PostAnalyzer:
+    def __init__(self):
+        pass
+
+    def categorize_tags(self, title: str) -> Tuple[bool, bool, Iterable[str]]:
+        """Parses tags out of the post title
+        Valid submission tags are things between [], {}, (), and ||
+
+        Valid tag values are:
+
+        * a single number (shorthand for part #)
+        * Pt/Pt./Part + number (integral or textual)
+        * Vol/Vol./Volume  + number (integral or textual)
+        * Update
+        * Final
+        * Finale
+        """
+        invalid_tags = []
+        is_series = False
+        is_final = False
+
+        # This was previously an extremely long regex that matched for a bunch
+        # of textual numbers like 'one', 'two', 'fifteen', etc. But it didn't
+        # really seem necessary so this is just a basic match of 3+ chars
+        # as the shortest number you can make with letters is length 3.
+        num_text_pattern = r"(?:[1-9][0-9]*|[a-z]{3,})"
+        final_pattern = r"finale?"
+
+        series_patterns = {
+            "number_only": rf"{num_text_pattern}",
+            "part": rf"(?:part|pt\.?)\s?{num_text_pattern}",
+            "volume": rf"vol(?:\.|ume)?\s{num_text_pattern}",
+            "update": rf"update(?:[ ]#?{num_text_pattern}?)?",
+        }
+
+        captures = re.findall(
+            r"(\[[^]]*\]|\(.*?\)|\{.*?\}|\|.*?\|)",
+            title
+        )
+
+        for c in captures:
+            if re.search(final_pattern, c, re.IGNORECASE):
+                is_series = True
+                is_final = True
+            elif any(re.fullmatch(p, c[1:-1].strip(), re.IGNORECASE)
+                     for p in series_patterns.values()):
+                is_series = True
+            else:
+                invalid_tags.append(c)
+        return is_series, is_final, invalid_tags
+
+    def contains_long_paragraphs(
+        self,
+        paragraphs: Iterable[str],
+        max_word_count: int = 350
+    ) -> bool:
+        for p in paragraphs:
+            if max_word_count < len(re.findall(r"\w+", p)):
+                return True
         return False
-    remap_chars = '{}[]()|.!?$*@#'
-    exclude_map = {
-        ord(c): ord(t) for c, t in zip(remap_chars, ' ' * len(remap_chars))
-    }
-    parts = title.lower().translate(exclude_map).split(' ')
-    return any('nsfw' == x.strip() for x in parts)
 
+    def contains_nsfw_title(self, title: str) -> bool:
+        remap_chars = "{}[]()|.!?$*@#"
+        exclude_map = {
+            ord(c): ord(t) for c, t in zip(remap_chars, " " * len(remap_chars))
+        }
+        parts = title.lower().translate(exclude_map).split()
+        return any("nsfw" == w.strip() for w in parts)
 
-def contains_codeblocks(paragraphs: Iterable[str]) -> bool:
-    for _, p in enumerate(paragraphs):
-        # this determines if the line is not just all whitespace and then
-        # whether or not it contains the 4 spaces or tab characters, which
-        # will trigger markdown <code> blocks
-        if p.strip() and (p.startswith('    ') or p.lstrip(' ').startswith('\t')):
-            return True
-    return False
+    def contains_codeblocks(self, paragraphs: Iterable[str]) -> bool:
+        """Determines if any paragraph (which is just a str) contains
+        codeblocks, which are at least 4 spaces or a tab character starting
+        a paragraph. Lines that only have whitespace characters do not
+        count as having 'codeblocks'."""
+        for p in paragraphs:
+            # means this is just a blank line
+            if not p.strip():
+                continue
+            if p.startswith(" "*4) or p.lstrip(" ").startswith("\t"):
+                return True
+        return False
 
-
-def collect_formatting_issues(post_body: str) -> FormattingIssues:
-    # split the post body by paragraphs
-    # Things that are considered 'paragraphs' are:
-    # * A newline followed by some arbitrary number of spaces
-    #   followed by a newline
-    # * At least two instances of whitespace followed by a newline
-    paragraphs = re.split(r'(?:\n\s*\n|[ \t]{2,}\n|\t\n)', post_body)
-    return FormattingIssues(
-            paragraphs_too_long(paragraphs),
-            contains_codeblocks(paragraphs))
+    def analyze(self, post: praw.models.Submission) -> PostMetadata:
+        paragraphs = re.split(r"(?:\n\s*\n|[ \t]{2,}\n|\t\n)", post.selftext)
+        series, final, bad_tags = self.categorize_tags(post.title)
+        meta = PostMetadata(
+            has_long_paragraphs=self.contains_long_paragraphs(paragraphs),
+            has_codeblocks=self.contains_codeblocks(paragraphs),
+            has_nsfw_title=self.contains_nsfw_title(post.title),
+            is_series=series or post.link_flair_text == "Series",
+            is_final=final,
+            invalid_tags=bad_tags
+        )
+        return meta
 
 
 class AutoBot:
@@ -215,9 +249,7 @@ class AutoBot:
     def prepare_delete_message(
         self,
         post: praw.models.Submission,
-        formatting_issues: FormattingIssues,
-        invalid_tags: Iterable[str],
-        title_issues: TitleIssues
+        post_meta: PostMetadata
     ) -> str:
 
         modmail_link = self.reddit.create_modmail_link()
@@ -228,7 +260,7 @@ class AutoBot:
 
         perm_del = False
 
-        if invalid_tags or any(title_issues):
+        if post_meta.invalid_tags or post_meta.has_nsfw_title:
             perm_del = True
 
         return self.msg_bld.create_deleted_post_msg(
@@ -236,10 +268,10 @@ class AutoBot:
             modmail_link=modmail_link,
             reapproval_modmail=reapproval_link,
             permanent=perm_del,
-            has_nsfw_title=title_issues.title_contains_nsfw,
-            has_codeblocks=formatting_issues.has_codeblocks,
-            long_paragraphs=formatting_issues.long_paragraphs,
-            invalid_tags=", ".join(invalid_tags)
+            has_nsfw_title=post_meta.has_nsfw_title,
+            has_codeblocks=post_meta.has_codeblocks,
+            long_paragraphs=post_meta.has_long_paragraphs,
+            invalid_tags=post_meta.bad_tags()
         )
 
     def process_posts(self, restrict_to_sub: bool = True):
@@ -252,7 +284,7 @@ class AutoBot:
         # in descending posted order
         posts = sorted(
             self.reddit.get_recent_posts(),
-            key=attrgetter('created_utc')
+            key=attrgetter("created_utc")
         )
 
         logger.info(
@@ -269,6 +301,7 @@ class AutoBot:
             if inv:
                 logger.warn(f"Search returned posts from other subs! {inv}")
 
+        analyzer = PostAnalyzer()
         for p in posts:
             logger.info("Processing submission {0}.".format(p.id))
 
@@ -302,39 +335,25 @@ class AutoBot:
                     sub.deleted = True
                 else:
                     # Here we want all the formatting and tag issues
-                    formatting_issues = collect_formatting_issues(p.selftext)
-                    title_issues = check_valid_title(p.title)
-                    post_tags = categorize_tags(p.title)
-
-                    if (post_tags['invalid_tags']
-                            or any(title_issues)
-                            or any(formatting_issues)):
+                    meta = analyzer.analyze(p)
+                    if meta.is_invalid():
                         # We have bad (tags|title) - Delete post and send PM.
-                        if post_tags['invalid_tags']:
-                            logger.info(f"Bad tags found: {post_tags['invalid_tags']}")
-                        if any(title_issues):
+                        if meta.invalid_tags:
+                            logger.info(f"Bad tags found: {meta.invalid_tags}")
+                        if meta.has_nsfw_title:
                             logger.info("Title issues found")
-                        msg = self.prepare_delete_message(
-                                p,
-                                formatting_issues,
-                                post_tags['invalid_tags'],
-                                title_issues
-                        )
+                        msg = self.prepare_delete_message(p, meta)
                         self.reddit.add_comment(
-                                p,
-                                msg,
-                                distinguish=True,
-                                sticky=True
+                            p,
+                            msg,
+                            distinguish=True,
+                            sticky=True
                         )
                         self.reddit.delete_post(p)
                         sub.deleted = True
-                    elif post_tags['valid_tags']:
-                        tags = [tag.lower() for tag in post_tags["valid_tags"]]
-                        if 'final' in tags:
-                            # This was the final story, so don't make a post
-                            # or send a PM
-                            logger.info("Final tag found, not posting/DMing.")
-                        else:
+                    elif meta.is_serial():
+                        # don't send PMs if this is final
+                        if not meta.is_final:
                             # We have series tags in place. Send a PM
                             logger.info("Series tags found, sending PM.")
                             self.reddit.send_series_pm(
@@ -348,14 +367,6 @@ class AutoBot:
                         # set the series flair for this post
                         self.reddit.set_series_flair(p)
                         sub.series = True
-                    else:
-                        # We had no tags at all.
-                        logger.info("No tags found in post title.")
-
-                        # Check if this submission has flair
-                        if p.link_flair_text == 'Series':
-                            sub.series = True
-                            post_series_comment = True
 
                 if post_series_comment:
                     series_comment = self.gen_series_reminder(p)
