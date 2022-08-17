@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from pathlib import Path
 
 import argparse
@@ -64,7 +65,7 @@ def transform_and_roll_out() -> None:
     hd = SubmissionHandler(rd)
     cd = Path(__file__).resolve().parent
     td = cd / "autobot" / "util" / "messages" / "templates"
-    print(td)
+    logging.info(f"Using template directory: {td}")
     mb = MessageBuilder(td)
     AutoBot(settings, hd, mb).run(args.forever, args.interval)
 
