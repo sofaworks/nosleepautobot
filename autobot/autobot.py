@@ -153,11 +153,16 @@ class PostAnalyzer:
     def analyze(self, post: praw.models.Submission) -> PostMetadata:
         paragraphs = re.split(r"(?:\n\s*\n|[ \t]{2,}\n|\t\n)", post.selftext)
         series, final, bad_tags = self.categorize_tags(post.title)
+        if not series:
+            try:
+                series = post.link_flair_text.lower() == self.series_flair
+            except AttributeError:
+                pass
         meta = PostMetadata(
             has_long_paragraphs=self.contains_long_paragraphs(paragraphs),
             has_codeblocks=self.contains_codeblocks(paragraphs),
             has_nsfw_title=self.contains_nsfw_title(post.title),
-            is_series=series or post.link_flair_text.lower() == self.series_flair,
+            is_series=series,
             is_final=final,
             invalid_tags=bad_tags
         )
@@ -318,15 +323,18 @@ class AutoBot:
                 # Do processing on previous submissions to see if we need to
                 # add the series message if we saw this before and it's not a
                 # series but then later flaired as one, send the message
-                if (not sub.series
-                    and p.link_flair_text.lower() == self.cfg.series_flair_name):
-                    logger.info(
-                        f"Submission {p.id} was flaired 'Series' after the "
-                        "fact. Posting series message."
-                    )
-                    sub.series = True
-                    post_series_comment = True
-                    self.hnd.update(sub)
+                if not sub.series:
+                    try:
+                        if (p.link_flair_text.lower() == self.cfg.series_flair_name.lower()):
+                            logger.info(
+                                f"Submission {p.id} was flaired 'Series' "
+                                "after the fact. Posting series message."
+                            )
+                            sub.series = True
+                            post_series_comment = True
+                            self.hnd.update(sub)
+                    except AttributeError:
+                        pass
             else:
                 sub = Submission(
                     id=p.id,
