@@ -1,7 +1,7 @@
 % if permanent:
 Hi there! [Your story](${post_url}) has been removed from from /r/nosleep for violating the following rules:
 % else:
-Hi there! [Your story]$({post_url}) has been **temporarily** removed from r/nosleep due to the following issues detected in it.
+Hi there! [Your story](${post_url}) has been **temporarily** removed from r/nosleep due to the following issues detected in it:
 % endif 
 
 % if invalid_tags:
