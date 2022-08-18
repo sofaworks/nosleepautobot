@@ -60,7 +60,6 @@ def transform_and_roll_out() -> None:
     if settings.rollbar_token:
         init_rollbar(settings.rollbar_token, settings.rollbar_env)
 
-    logging.info(f"Using redis({settings.redis_url}) for redis")
     rd = redis.Redis.from_url(settings.redis_url)
     hd = SubmissionHandler(rd)
     cd = Path(__file__).resolve().parent
