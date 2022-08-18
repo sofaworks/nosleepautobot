@@ -125,6 +125,16 @@ class TestBotMethods(TestCase):
         self.assertFalse(final, "Should be final but isn't")
         self.assertEqual(len(bad_tags), 0, f"Unexpected bad tags: {bad_tags}")
 
+    def test_bad_tags(self):
+        """Test that we support numeric and textual part numbers."""
+        title = "Story with numeric and text part numbers [oneteen][vol. 10]"
+        analyzer = PostAnalyzer()
+        series, final, bad_tags = analyzer.categorize_tags(title)
+        self.assertTrue(series, "Should be a series but isn't")
+        self.assertFalse(final, "Should be final but isn't")
+        self.assertEqual(len(bad_tags), 1, f"Unexpected bad tags: {bad_tags}")
+
+
     def test_update_tags(self):
         """Test that tags like 'Update #3' and 'Update 99' are allowed"""
         analyzer = PostAnalyzer()

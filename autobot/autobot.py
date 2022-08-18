@@ -89,7 +89,11 @@ class PostAnalyzer:
         # of textual numbers like 'one', 'two', 'fifteen', etc. But it didn't
         # really seem necessary so this is just a basic match of 3+ chars
         # as the shortest number you can make with letters is length 3.
-        num_text_pattern = r"(?:[1-9][0-9]*|[a-z]{3,})"
+        num_text_pattern = (
+            r"(?:[1-9][0-9]*|one|two|three|five|ten|eleven|twelve|fifteen"
+            r"|(?:(?:four|six|seven|eight|nine)(?:teen)?))"
+        )
+
         final_pattern = r"finale?"
 
         series_patterns = {
