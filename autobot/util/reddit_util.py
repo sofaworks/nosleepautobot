@@ -100,6 +100,7 @@ class SubredditTool:
         post: praw.models.Submission,
         comment: str
     ) -> None:
+        self.logger.info(f"Posting series reminder for {post.id}")
         self.add_comment(
             post,
             comment,

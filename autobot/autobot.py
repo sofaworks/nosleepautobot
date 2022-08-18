@@ -315,6 +315,7 @@ class AutoBot:
             logger.info("Processing submission {0}.".format(p.id))
 
             post_series_comment = False
+            send_series_pm = False
             if sub := self.hnd.get(p.id):
                 logger.info(
                     f"Submission {p.id} was previously processed. "
@@ -332,6 +333,8 @@ class AutoBot:
                             )
                             sub.series = True
                             post_series_comment = True
+                            send_series_pm = True
+                            sub.sent_series_pm = True
                             self.hnd.update(sub)
                     except AttributeError:
                         pass
@@ -367,29 +370,34 @@ class AutoBot:
                     elif meta.is_serial():
                         # don't send PMs if this is final
                         if not meta.is_final:
-                            # We have series tags in place. Send a PM
-                            logger.info("Series tags found, sending PM.")
-                            self.reddit.send_series_pm(
-                                p,
-                                self.msg_bld.create_series_msg(p.shortlink)
-                            )
                             # Post the remindme bot message
                             post_series_comment = True
+                            send_series_pm = True
                             sub.sent_series_pm = True
 
                         # set the series flair for this post
                         self.reddit.set_series_flair(p)
                         sub.series = True
 
-                if post_series_comment:
-                    series_comment = self.gen_series_reminder(p)
-                    self.reddit.post_series_reminder(p, series_comment)
-
                 logger.info(
                     f"Caching metadata for submission {p.id} "
                     f"for {cache_ttl} seconds"
                 )
                 self.hnd.persist(sub, ttl=cache_ttl)
+
+            # end of else
+            if post_series_comment:
+                series_comment = self.gen_series_reminder(p)
+                self.reddit.post_series_reminder(p, series_comment)
+
+            if send_series_pm:
+                # We have series tags in place. Send a PM
+                logger.info("Series tags found, sending PM.")
+                self.reddit.send_series_pm(
+                    p,
+                    self.msg_bld.create_series_msg(p.shortlink)
+                )
+
 
     def run(self, forever: bool = False, interval: int = 300):
         """Run the autobot to find posts. Can be specified to run `forever`
