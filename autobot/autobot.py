@@ -305,7 +305,7 @@ class AutoBot:
             if inv:
                 logger.warn(f"Search returned posts from other subs! {inv}")
 
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer(self.cfg.series_flair_name)
         for p in posts:
             logger.info("Processing submission {0}.".format(p.id))
 
