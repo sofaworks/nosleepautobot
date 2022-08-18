@@ -65,8 +65,8 @@ class PostMetadata:
 
 
 class PostAnalyzer:
-    def __init__(self):
-        pass
+    def __init__(self, series_flair: str):
+        self.series_flair = series_flair.lower()
 
     def categorize_tags(self, title: str) -> Tuple[bool, bool, Iterable[str]]:
         """Parses tags out of the post title
@@ -157,7 +157,7 @@ class PostAnalyzer:
             has_long_paragraphs=self.contains_long_paragraphs(paragraphs),
             has_codeblocks=self.contains_codeblocks(paragraphs),
             has_nsfw_title=self.contains_nsfw_title(post.title),
-            is_series=series or post.link_flair_text == "Series",
+            is_series=series or post.link_flair_text.lower() == self.series_flair,
             is_final=final,
             invalid_tags=bad_tags
         )
@@ -318,7 +318,8 @@ class AutoBot:
                 # Do processing on previous submissions to see if we need to
                 # add the series message if we saw this before and it's not a
                 # series but then later flaired as one, send the message
-                if not sub.series and p.link_flair_text == 'Series':
+                if (not sub.series
+                    and p.link_flair_text.lower() == self.cfg.series_flair_name):
                     logger.info(
                         f"Submission {p.id} was flaired 'Series' after the "
                         "fact. Posting series message."

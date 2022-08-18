@@ -23,7 +23,7 @@ class TestBotMethods(TestCase):
 
     def test_reject_nsfw_in_title(self):
         """Test that the presence of "nsfw" in titles is a rejection"""
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         self.assertTrue(analyzer.contains_nsfw_title("blah blah nsfw blah"))
         self.assertFalse(analyzer.contains_nsfw_title("NsFw_title_in_bars"))
         self.assertTrue(analyzer.contains_nsfw_title("nsfw leading title"))
@@ -36,7 +36,7 @@ class TestBotMethods(TestCase):
 
     def test_reject_long_paragraphs(self):
         """This test asserts that paragraphs > (length) words are rejected."""
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         # Basic test with just words
         text = " ".join(["text"] * 351)
         self.assertTrue(analyzer.contains_long_paragraphs([text]))
@@ -53,7 +53,7 @@ class TestBotMethods(TestCase):
     def test_live_story_paragraphs(self):
         # Soul Cancer initiated issue #13
         files_dir = self._get_files_dir()
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         with open(files_dir / "soul_cancer.md", "r") as sc:
             story = sc.read()
             submission = FakeSubmission(selftext=story)
@@ -63,7 +63,7 @@ class TestBotMethods(TestCase):
     def test_chezecaek_full_story(self):
         # Chezecaek initiated issue #17
         files_dir = self._get_files_dir()
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         with open(files_dir / "chezecaek.md", "r") as sc:
             story = sc.read()
             submission = FakeSubmission(selftext=story)
@@ -75,7 +75,7 @@ class TestBotMethods(TestCase):
 
         # This test sees if paragraphs that have crappy line breaks
         # are accepted correctly.
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         text = " ".join(["text"] * 300)
         text += "\n \n"
         text += " ".join(['more'] * 100)
@@ -86,7 +86,7 @@ class TestBotMethods(TestCase):
         """Test for codeblocks in a message"""
 
         code_opening = " " * 4
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         text = f"{code_opening}This starts with four spaces"
         self.assertTrue(analyzer.contains_codeblocks([text]))
 
@@ -101,7 +101,7 @@ class TestBotMethods(TestCase):
 
     def test_categorize_tags(self):
         title = "This is a sample post (volume 1) {part 2} |part 3|"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, invalid = analyzer.categorize_tags(title)
         self.assertEqual(len(invalid), 0, f"Unexpected bad tags: {invalid}")
         self.assertTrue(series)
@@ -110,7 +110,7 @@ class TestBotMethods(TestCase):
     def test_mixed_series_final(self):
         """Test that you can have a 'final' and other series tags"""
         title = "This is a story [pt. 999][final]"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, bad_tags = analyzer.categorize_tags(title)
         self.assertTrue(series, "Should be a series but isn't")
         self.assertTrue(final, "Should be final but isn't")
@@ -119,7 +119,7 @@ class TestBotMethods(TestCase):
     def test_series_numbers(self):
         """Test that we support numeric and textual part numbers."""
         title = "Story with numeric and text part numbers [part one][vol. 10]"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, bad_tags = analyzer.categorize_tags(title)
         self.assertTrue(series, "Should be a series but isn't")
         self.assertFalse(final, "Should be final but isn't")
@@ -128,7 +128,7 @@ class TestBotMethods(TestCase):
     def test_bad_tags(self):
         """Test that we support numeric and textual part numbers."""
         title = "Story with numeric and text part numbers [oneteen][vol. 10]"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, bad_tags = analyzer.categorize_tags(title)
         self.assertTrue(series, "Should be a series but isn't")
         self.assertFalse(final, "Should be final but isn't")
@@ -137,7 +137,7 @@ class TestBotMethods(TestCase):
 
     def test_update_tags(self):
         """Test that tags like 'Update #3' and 'Update 99' are allowed"""
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("Series")
         title = "This is a sample [update #3] [update 100] [update1]"
         series, _, bad_tags = analyzer.categorize_tags(title)
         self.assertEqual(len(bad_tags), 1, f"Unexpected bad tags: {bad_tags}")
@@ -148,7 +148,7 @@ class TestBotMethods(TestCase):
         """Some tags specifically allow you to not specify a number, or you
         can also have just a number"""
         title = "Truckers Have Some of The Best Stories (update)(100)[ten]"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, bad_tags = analyzer.categorize_tags(title)
         self.assertTrue(series)
         self.assertFalse(final)
@@ -156,7 +156,7 @@ class TestBotMethods(TestCase):
 
     def test_wacky_spaced_tags(self):
         title = "Story with wacky tag spaces ( Vol 1 ) {   PT 2 }| finale  |"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, bad_tags = analyzer.categorize_tags(title)
 
         self.assertEqual(len(bad_tags), 0, f"Unexpected bad tags: {bad_tags}")
@@ -165,7 +165,7 @@ class TestBotMethods(TestCase):
 
     def test_categorize_tags_varying_case(self):
         title = "This is a sample post (VoLuME 1) {PT 2}"
-        analyzer = PostAnalyzer()
+        analyzer = PostAnalyzer("series")
         series, final, bad_tags = analyzer.categorize_tags(title)
 
         self.assertEqual(len(bad_tags), 0, f"Unexpected bad tags: {bad_tags}")
