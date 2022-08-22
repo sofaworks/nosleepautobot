@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from operator import attrgetter
-from typing import Tuple
+from typing import Any
 import itertools
 import json
 import re
@@ -69,7 +69,7 @@ class PostAnalyzer:
     def __init__(self, series_flair: str):
         self.series_flair = series_flair.lower()
 
-    def categorize_tags(self, title: str) -> Tuple[bool, bool, Iterable[str]]:
+    def categorize_tags(self, title: str) -> tuple[bool, bool, Iterable[str]]:
         """Parses tags out of the post title
         Valid submission tags are things between [], {}, (), and ||
 
@@ -183,27 +183,45 @@ class AutoBot:
         self.reddit = SubredditTool(cfg)
         self.analyzer = PostAnalyzer(cfg.series_flair_name)
 
-    def reject_submission_by_timelimit(
-        self,
-        post: praw.models.Submission
-    ) -> bool:
+    def reject_by_timelimit(self, post: praw.models.Submission) -> bool:
         """Determine if a submission should be removed based on a time-limit
-        for submissions for a subreddit."""
-        now = time.time()
+        for submissions for a subreddit.
 
-        # TODO this is duplicated in process_time_limit_message
+        If a post is rejected, add a comment to the post."""
+        if not self.cfg.enforce_timelimit:
+            return False
+
+        rejected = False
         most_recent = min(
             self.reddit.get_redditor_posts(post.author),
             key=attrgetter("created_utc"),
             default=None
         )
-
         if most_recent and most_recent.id != post.id:
-            allowed_when = most_recent.created_utc + self.cfg.post_timelimit
-            if allowed_when > now:
-                return True
+            time_diff = post.created_utc - most_recent.created_utc
+            allowed_when = self.cfg.post_timelimit - time_diff
+            if allowed_when > 0:
+                rejected = True
+                human_fmt = englishify_time(allowed_when)
+                log_params = {
+                    "reason": "time limit",
+                    "permanent": True,
+                    "post_id": post.id,
+                    "old_post_id": most_recent.id,
+                    "author": post.author.name,
+                    "post_timestamp": post.created_utc,
+                    "old_post_timestamp": most_recent.created_utc,
+                    "can_post_in": allowed_when,
+                }
+                logger.info("Rejecting post and notifying author", **log_params)
+                msg = self.msg_bld.create_post_a_day_msg(
+                    human_fmt,
+                    self.reddit.create_modmail_link()
+                )
+                self.reddit.add_comment(post, msg, distinguish=True)
+                self.reddit.delete_post(post)
 
-        return False
+        return rejected
 
     def gen_series_reminder(self, post: praw.models.Submission) -> str:
         q = {
@@ -214,42 +232,6 @@ class AutoBot:
         }
         sub_url = self.reddit.gen_compose_url(q)
         return self.msg_bld.create_series_comment(sub_url)
-
-    def process_time_limit_message(self, post: praw.models.Submission) -> None:
-        """Because it's hard to determine if something's actually been
-        deleted, this has to just find the most recent posts by the user
-        from the last day."""
-
-        # TODO this is duplicated in reject_submission_by_timelimit
-        most_recent = min(
-            self.reddit.get_redditor_posts(post.author),
-            key=attrgetter("created_utc"),
-            default=None
-        )
-
-        if most_recent:
-            time_diff = post.created_utc - most_recent.created_utc
-            time_to_next_post = self.cfg.post_timelimit - time_diff
-            human_fmt = englishify_time(time_to_next_post)
-
-            log_params = {
-                "reason": "time limit",
-                "permanent": True,
-                "post_id": post.id,
-                "old_post_id": most_recent.id,
-                "author": post.author.name,
-                "post_timestamp": post.created_utc,
-                "old_post_timestamp": most_recent.created_utc,
-                "can_post_in": time_to_next_post,
-            }
-            logger.info("Rejecting post and notifying author", **log_params)
-            msg = self.msg_bld.create_post_a_day_msg(
-                human_fmt,
-                self.reddit.create_modmail_link()
-            )
-
-            self.reddit.add_comment(post, msg, distinguish=True)
-            self.reddit.delete_post(post)
 
     def prepare_delete_message(
         self,
@@ -278,9 +260,6 @@ class AutoBot:
             long_paragraphs=post_meta.has_long_paragraphs,
             invalid_tags=post_meta.bad_tags()
         )
-
-    def check_processed_post(self):
-        pass
 
     def process_posts(self, restrict_to_sub: bool = True):
         cache_ttl = self.cfg.post_timelimit * 2
@@ -353,11 +332,9 @@ class AutoBot:
                     submitted=p.created_utc
                 )
 
-                extra_log = {}
+                extra_log: dict[str, Any] = {}
 
-                if (self.cfg.enforce_timelimit and
-                        self.reject_submission_by_timelimit(p)):
-                    self.process_time_limit_message(p)
+                if self.reject_by_timelimit(p):
                     sub.deleted = True
                 else:
                     # Here we want all the formatting and tag issues

@@ -139,7 +139,7 @@ class SubredditTool:
             self.logger.info(
                 "Creating comment on post",
                 post_id=post.id,
-                author=post.author,
+                author=post.author.name,
                 sticky=sticky,
                 distinguish=distinguish,
                 lock=lock
