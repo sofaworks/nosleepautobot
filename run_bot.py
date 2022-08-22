@@ -13,7 +13,31 @@ from autobot.util.messages.templater import MessageBuilder
 
 import redis
 import rollbar
-from rollbar.logger import RollbarHandler
+import structlog
+
+
+def configure_structlog() -> None:
+    procs = [
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder()
+    ]
+
+    if sys.stderr.isatty():
+        procs.append(structlog.dev.ConsoleRenderer())
+    else:
+        procs.append(structlog.processors.JSONRenderer())
+
+    structlog.configure(
+        processors=procs,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
 
 def create_argparser() -> argparse.ArgumentParser:
@@ -36,20 +60,25 @@ def create_argparser() -> argparse.ArgumentParser:
 
 
 def uncaught_ex_handler(ex_type, value, tb) -> None:
-    logging.critical("Got an uncaught exception")
-    logging.critical("".join(traceback.format_tb(tb)))
-    logging.critical(f"{ex_type}: {value}")
+    log = structlog.get_logger()
+    log.critical("Got an uncaught exception")
+    log.critical("".join(traceback.format_tb(tb)))
+    log.critical(f"{ex_type}: {value}")
+    rollbar.report_exc_info()
 
 
 def init_rollbar(token: str, environment: str) -> None:
     rollbar.init(token, environment)
-    rollbar_handler = RollbarHandler()
-    rollbar_handler.setLevel(logging.ERROR)
-    logging.getLogger("autobot").addHandler(rollbar_handler)
 
 
 def transform_and_roll_out() -> None:
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    configure_structlog()
+    logging.basicConfig(
+        format="%(message)s",
+        stream=sys.stdout,
+        level=logging.INFO,
+    )
+    log = structlog.get_logger()
     sys.excepthook = uncaught_ex_handler
 
     parser = create_argparser()
@@ -64,7 +93,15 @@ def transform_and_roll_out() -> None:
     hd = SubmissionHandler(rd)
     cd = Path(__file__).resolve().parent
     td = cd / "autobot" / "util" / "messages" / "templates"
-    logging.info(f"Using template directory: {td}")
+    log_params = {
+        "development_mode": settings.development_mode,
+        "template_directory": str(td),
+        "moderating_subreddit": settings.subreddit,
+        "enforcing_timelimit": settings.enforce_timelimit,
+        "timelimit": settings.post_timelimit,
+        "reddit_user": settings.reddit_username
+    }
+    log.info("Bot starting", **log_params)
     mb = MessageBuilder(td)
     AutoBot(settings, hd, mb).run(args.forever, args.interval)
 

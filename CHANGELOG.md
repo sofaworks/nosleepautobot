@@ -27,3 +27,4 @@ This is a changelog of changes that ship to production.
 
 * [Issue 99](https://github.com/sofaworks/nosleepautobot/issues/99) - Fix search when usernames are hyphenated
 * [Issue 102](https://github.com/sofaworks/nosleepautobot/issues/102) - Add filtering for submissions in search results that aren't from the bot's managed subreddit
+* [Issue 110](https://github.com/sofaworks/nosleepautobot/issues/110 ) - Fixed sending series PM for posts tagged `Series` after-the-fact

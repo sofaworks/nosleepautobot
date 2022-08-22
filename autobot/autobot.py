@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from operator import attrgetter
 from typing import Tuple
 import itertools
-import logging
 import re
 import time
 
@@ -14,9 +13,10 @@ from autobot.util.reddit_util import SubredditTool
 
 import praw
 import rollbar
+import structlog
 
 
-logger = logging.getLogger("autobot")
+logger = structlog.get_logger()
 
 
 def partition(cond, it):
@@ -180,13 +180,7 @@ class AutoBot:
         self.hnd = hnd
         self.msg_bld = msg_builder
         self.reddit = SubredditTool(cfg)
-
-        logger.info(f"Development mode on? {self.cfg.development_mode}")
-        logger.info(
-            f"Moderating: {self.cfg.subreddit}. "
-            f"Enforcing time limits? {self.cfg.enforce_timelimit}. "
-            f"Time limit? {self.cfg.post_timelimit} seconds."
-        )
+        self.analyzer = PostAnalyzer(cfg.series_flair_name)
 
     def reject_submission_by_timelimit(
         self,
@@ -196,6 +190,7 @@ class AutoBot:
         for submissions for a subreddit."""
         now = time.time()
 
+        # TODO this is duplicated in process_time_limit_message
         most_recent = min(
             self.reddit.get_redditor_posts(post.author),
             key=attrgetter("created_utc"),
@@ -205,10 +200,6 @@ class AutoBot:
         if most_recent and most_recent.id != post.id:
             allowed_when = most_recent.created_utc + self.cfg.post_timelimit
             if allowed_when > now:
-                logger.info(
-                    f"Rejecting submission {post.id} "
-                    f"by /u/{post.author.name} due to time limit"
-                )
                 return True
 
         return False
@@ -227,6 +218,8 @@ class AutoBot:
         """Because it's hard to determine if something's actually been
         deleted, this has to just find the most recent posts by the user
         from the last day."""
+
+        # TODO this is duplicated in reject_submission_by_timelimit
         most_recent = min(
             self.reddit.get_redditor_posts(post.author),
             key=attrgetter("created_utc"),
@@ -234,19 +227,21 @@ class AutoBot:
         )
 
         if most_recent:
-            logger.info(
-                f"Previous post by {post.author} was at: "
-                f"{most_recent.created_utc}"
-            )
-            logger.info(
-                f"Current post by {post.author} was at: "
-                f"{post.created_utc}"
-            )
             time_diff = post.created_utc - most_recent.created_utc
             time_to_next_post = self.cfg.post_timelimit - time_diff
             human_fmt = englishify_time(time_to_next_post)
-            logger.info(f"Notify {post.author} to post again in {human_fmt}")
 
+            log_params = {
+                "reason": "time limit",
+                "permanent": True,
+                "post_id": post.id,
+                "old_post_id": most_recent.id,
+                "author": post.author,
+                "post_timestamp": post.created_utc,
+                "old_post_timestamp": most_recent.created_utc,
+                "can_post_in": time_to_next_post,
+            }
+            logger.info("Rejecting post and notifying author", **log_params)
             msg = self.msg_bld.create_post_a_day_msg(
                 human_fmt,
                 self.reddit.create_modmail_link()
@@ -283,6 +278,9 @@ class AutoBot:
             invalid_tags=post_meta.bad_tags()
         )
 
+    def check_processed_post(self):
+        pass
+
     def process_posts(self, restrict_to_sub: bool = True):
         cache_ttl = self.cfg.post_timelimit * 2
 
@@ -297,8 +295,10 @@ class AutoBot:
         )
 
         logger.info(
-            f"Found {len(posts)} submissions in "
-            f"/r/{self.reddit.subreddit_name()} from the last hour.")
+            "Processing posts from last hour",
+            subreddit=self.reddit.subreddit_name(),
+            posts_found=len(posts)
+        )
 
         # prevent issue 102 from happening
         if restrict_to_sub:
@@ -308,29 +308,35 @@ class AutoBot:
             )
             inv = " ".join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
             if inv:
-                logger.warn(f"Search returned posts from other subs! {inv}")
+                logger.warn(
+                    "Search returned posts from other subreddits!",
+                    invalid_posts=inv
+                )
 
-        analyzer = PostAnalyzer(self.cfg.series_flair_name)
         for p in posts:
-            logger.info("Processing submission {0}.".format(p.id))
-
             post_series_comment = False
             send_series_pm = False
             if sub := self.hnd.get(p.id):
+                # if we already have a submission in storage, we care about:
+                # 1. Checking if the submission isn't marked as 'series'
+                # 2. If it hasn't been, check if the post is a 'series' flair
+                # 3. If it is a series, then update the series property
+                # 4. And then we want to send PMs
                 logger.info(
-                    f"Submission {p.id} was previously processed. "
-                    "Doing previous submission checks."
+                    "Processing previously seen submission",
+                    submission=sub.json()
                 )
                 # Do processing on previous submissions to see if we need to
                 # add the series message if we saw this before and it's not a
                 # series but then later flaired as one, send the message
                 if not sub.series:
                     try:
-                        if (p.link_flair_text.lower() == self.cfg.series_flair_name.lower()):
+                        if p.link_flair_text.lower() == self.cfg.series_flair_name.lower():
                             logger.info(
-                                f"Submission {p.id} was flaired 'Series' "
-                                "after the fact. Posting series message."
+                                "Post was flaired 'Series' after the fact. Posting message",
+                                post_id=p.id
                             )
+
                             sub.series = True
                             post_series_comment = True
                             send_series_pm = True
@@ -345,19 +351,23 @@ class AutoBot:
                     submitted=p.created_utc
                 )
 
+                extra_log = {}
+
                 if (self.cfg.enforce_timelimit and
                         self.reject_submission_by_timelimit(p)):
                     self.process_time_limit_message(p)
                     sub.deleted = True
                 else:
                     # Here we want all the formatting and tag issues
-                    meta = analyzer.analyze(p)
+                    meta = self.analyzer.analyze(p)
+                    extra_log["invalid_tags"] = meta.invalid_tags
+                    extra_log["has_nsfw_title"] = meta.has_nsfw_title
+                    extra_log["has_codeblocks"] = meta.has_codeblocks
+                    extra_log["has_long_paragraphs"] = meta.has_long_paragraphs
+                    extra_log["series_finale"] = meta.is_final
+
                     if meta.is_invalid():
                         # We have bad (tags|title) - Delete post and send PM.
-                        if meta.invalid_tags:
-                            logger.info(f"Bad tags found: {meta.invalid_tags}")
-                        if meta.has_nsfw_title:
-                            logger.info("Title issues found")
                         msg = self.prepare_delete_message(p, meta)
                         self.reddit.add_comment(
                             p,
@@ -380,8 +390,9 @@ class AutoBot:
                         sub.series = True
 
                 logger.info(
-                    f"Caching metadata for submission {p.id} "
-                    f"for {cache_ttl} seconds"
+                    "Processed post",
+                    submission=sub.json(),
+                    **extra_log
                 )
                 self.hnd.persist(sub, ttl=cache_ttl)
 
@@ -392,12 +403,10 @@ class AutoBot:
 
             if send_series_pm:
                 # We have series tags in place. Send a PM
-                logger.info("Series tags found, sending PM.")
                 self.reddit.send_series_pm(
                     p,
                     self.msg_bld.create_series_msg(p.shortlink)
                 )
-
 
     def run(self, forever: bool = False, interval: int = 300):
         """Run the autobot to find posts. Can be specified to run `forever`
@@ -418,5 +427,5 @@ class AutoBot:
             run_interval = (time.time() - bot_start_time) % float(interval)
             sleep_interval = float(interval) - run_interval
 
-            logger.info(f"Sleeping {sleep_interval} seconds until next run.")
+            logger.info(f"Sleeping until next run.", sleep_seconds=sleep_interval)
             time.sleep(sleep_interval)

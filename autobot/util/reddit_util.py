@@ -1,11 +1,10 @@
 from collections.abc import Iterator, Mapping
 import urllib.parse
 
-import logging
-
 from autobot.config import Settings
 
 import praw
+import structlog
 
 PrawSubmissionIter = Iterator[praw.models.Submission]
 
@@ -17,7 +16,7 @@ class MissingFlairException(Exception):
 
 class SubredditTool:
     def __init__(self, cfg: Settings) -> None:
-        self.logger = logging.getLogger("reddit-tool")
+        self.logger = structlog.get_logger()
         self.read_only = cfg.development_mode
         self.reddit = praw.Reddit(
             user_agent=cfg.user_agent,
@@ -80,19 +79,26 @@ class SubredditTool:
     ) -> None:
         if not self.read_only:
             try:
+                self.logger.info(
+                    "Sending Series PM",
+                    post_id=post.id,
+                    author=post.author
+                )
                 post.author.message(
                     "Reminder about your series post on r/nosleep",
                     msg,
                     None
                 )
-            except Exception as e:
-                self.logger.info(
-                    f"Problem sending series message to {post.author.name}: "
-                    f"{repr(e)}"
+            except Exception:
+                self.logger.exception(
+                    "Problem sending series message",
+                    author=post.author.name
                 )
         else:
             self.logger.info(
-                "Running in DEVELOPMENT MODE - not PMing series msg"
+                "Running in DEVELOPMENT MODE - not PMing series msg",
+                post_id=post.id,
+                author=post.author
             )
 
     def post_series_reminder(
@@ -100,7 +106,7 @@ class SubredditTool:
         post: praw.models.Submission,
         comment: str
     ) -> None:
-        self.logger.info(f"Posting series reminder for {post.id}")
+        self.logger.info("Adding series subscribeme comment ", post_id=post.id)
         self.add_comment(
             post,
             comment,
@@ -113,7 +119,11 @@ class SubredditTool:
         if not self.read_only:
             post.mod.remove()
         else:
-            self.logger.info("Running in DEVELOPMENT MODE - not deleting post")
+            self.logger.info(
+                "Running in DEVELOPMENT MODE - not deleting post",
+                post_id=post.id,
+                author=post.author
+            )
 
     def add_comment(
         self,
@@ -126,6 +136,14 @@ class SubredditTool:
     ) -> None:
         """Make a comment on the provided post."""
         if not self.read_only:
+            self.logger.info(
+                "Creating comment on post",
+                post_id=post.id,
+                author=post.author,
+                sticky=sticky,
+                distinguish=distinguish,
+                lock=lock
+            )
             rsp = post.reply(msg)
             dis = "yes" if distinguish else "no"
             rsp.mod.distinguish(how=dis, sticky=sticky)
@@ -133,7 +151,9 @@ class SubredditTool:
                 rsp.mod.lock()
         else:
             self.logger.info(
-                f"Running in DEVELOPMENT MODE - not adding comment: '{msg}'"
+                "Running in DEVELOPMENT MODE - not adding comment",
+                post_id=post.id,
+                author=post.author
             )
 
     def set_series_flair(
@@ -151,13 +171,18 @@ class SubredditTool:
                         return
                     except KeyError:
                         # This shouldn't happen
+                        self.logger.exception("Unexpected exception")
                         raise
             raise MissingFlairException(
                 f"Flair class {name} not found for "
                 f"subreddit /r/{self.subreddit_name}"
             )
         else:
-            self.logger.info("Running in DEVELOPMENT MODE - not flairing post")
+            self.logger.info(
+                "Running in DEVELOPMENT MODE - not flairing post",
+                post_id=post.id,
+                author=post.author
+            )
 
     def gen_compose_url(self, query: Mapping[str, str]) -> str:
         qs = urllib.parse.urlencode(query)
