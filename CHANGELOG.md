@@ -22,6 +22,7 @@ This is a changelog of changes that ship to production.
 * Move all post validation into new `PostValidator` class
 * Move Reddit/Subreddit utilities into `SubredditTool` class
 * Introduce `pydantic` for settings management
+* Introduce `structlog` for logging
 
 ### Fixed
 
