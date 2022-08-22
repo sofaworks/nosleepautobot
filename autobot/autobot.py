@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from operator import attrgetter
 from typing import Tuple
 import itertools
+import json
 import re
 import time
 
@@ -236,7 +237,7 @@ class AutoBot:
                 "permanent": True,
                 "post_id": post.id,
                 "old_post_id": most_recent.id,
-                "author": post.author,
+                "author": post.author.name,
                 "post_timestamp": post.created_utc,
                 "old_post_timestamp": most_recent.created_utc,
                 "can_post_in": time_to_next_post,
@@ -324,7 +325,8 @@ class AutoBot:
                 # 4. And then we want to send PMs
                 logger.info(
                     "Processing previously seen submission",
-                    submission=sub.json()
+                    post_id=p.id,
+                    author=p.author.name
                 )
                 # Do processing on previous submissions to see if we need to
                 # add the series message if we saw this before and it's not a
@@ -391,7 +393,7 @@ class AutoBot:
 
                 logger.info(
                     "Processed post",
-                    submission=sub.json(),
+                    submission=json.loads(sub.json()),
                     **extra_log
                 )
                 self.hnd.persist(sub, ttl=cache_ttl)
