@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+from typing import Any
 
 import argparse
 import logging
@@ -8,7 +9,6 @@ import traceback
 
 from autobot.autobot import AutoBot
 from autobot.config import Settings
-from autobot.models import SubmissionHandler
 from autobot.util.messages.templater import MessageBuilder
 
 import redis
@@ -17,7 +17,7 @@ import structlog
 
 
 def configure_structlog() -> None:
-    procs = [
+    procs: list[Any] = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
@@ -53,7 +53,7 @@ def create_argparser() -> argparse.ArgumentParser:
         "--interval",
         required=False,
         type=int,
-        default=300,
+        default=30,
         help="Seconds to wait between run cycles, if 'forever' is specified."
     )
     return parser
@@ -89,8 +89,7 @@ def transform_and_roll_out() -> None:
     if settings.rollbar_token:
         init_rollbar(settings.rollbar_token, settings.rollbar_env)
 
-    rd = redis.Redis.from_url(settings.redis_url)
-    hd = SubmissionHandler(rd)
+    rd = redis.Redis.from_url(settings.redis_url, decode_responses=True)
     cd = Path(__file__).resolve().parent
     td = cd / "autobot" / "util" / "messages" / "templates"
     log_params = {
@@ -103,7 +102,7 @@ def transform_and_roll_out() -> None:
     }
     log.info("Bot starting", **log_params)
     mb = MessageBuilder(td)
-    AutoBot(settings, hd, mb).run(args.forever, args.interval)
+    AutoBot(settings, rd, mb).run(args.forever, args.interval)
 
 
 if __name__ == "__main__":
