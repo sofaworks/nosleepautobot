@@ -1,0 +1,23 @@
+# fly.toml file generated for nosleepautobot-prod on 2022-09-05T00:45:59-04:00
+
+app = "nosleepautobot-prod"
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  AUTOBOT_POST_TIMELIMIT = "86400"
+  AUTOBOT_ENFORCE_TIMELIMIT = "true"
+  AUTOBOT_SUBREDDIT = "nosleep"
+  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220903 (by /u/SofaAssassin)"
+  DEVELOPMENT_MODE = "false"
+
+[experimental]
+  allowed_public_ports = []
+  auto_rollback = true
+
+[processes]
+  worker = "python3 run_bot.py --forever --interval 30
