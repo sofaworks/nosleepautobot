@@ -45,7 +45,30 @@ class SubredditTool:
         )
         return r
 
-    def get_recent_posts(self) -> PrawSubmissionIter:
+    def retrieve_new_posts(
+        self,
+        *,
+        before: praw.models.Submission | None = None,
+    ) -> PrawSubmissionIter:
+        """This does essentially what search_recent_posts does, but
+        gets new posts by using the 'new' endpoint, which returns
+        recent posts faster than searching for them."""
+        self.logger.info(f"Fetching for before: {before}")
+
+        # safety check in case the 'before' got deleted between
+        # the last time we used it
+        if before:
+            submission = self.reddit.submission(before.id)
+            if submission.removed:
+                self.logger.info(
+                    "Post was removed, not using 'before' parameter",
+                    subreddit=before.subreddit.display_name,
+                    id=before.id)
+                before = None
+        params = {"before": before.name} if before else {}
+        return self.subreddit.new(params=params)
+
+    def search_recent_posts(self) -> PrawSubmissionIter:
         """Get most recent submissions from the subreddit - right now it
         fetches the last hour's worth of results."""
         self.logger.info("Retrieving submissions from the last hour")
@@ -66,7 +89,7 @@ class SubredditTool:
         return self._get_posts(
             f'author:"{redditor.name}"',
             time_filter="day",
-            syntax="cloudsearch"
+            syntax="lucene"
         )
 
     def subreddit_name(self) -> str:
@@ -122,7 +145,7 @@ class SubredditTool:
             self.logger.info(
                 "Running in DEVELOPMENT MODE - not deleting post",
                 post_id=post.id,
-                author=post.author
+                author=post.author.name
             )
 
     def add_comment(
@@ -153,7 +176,7 @@ class SubredditTool:
             self.logger.info(
                 "Running in DEVELOPMENT MODE - not adding comment",
                 post_id=post.id,
-                author=post.author
+                author=post.author.name
             )
 
     def set_series_flair(

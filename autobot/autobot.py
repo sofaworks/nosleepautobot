@@ -8,12 +8,12 @@ import re
 import time
 
 from autobot.config import Settings
-from autobot.models import Submission, SubmissionHandler
+from autobot.models import Activity, DataStore, Submission
 from autobot.util.messages.templater import MessageBuilder
 from autobot.util.reddit_util import SubredditTool
 
 import praw
-import rollbar
+import redis
 import structlog
 
 
@@ -174,14 +174,17 @@ class AutoBot:
     def __init__(
         self,
         cfg: Settings,
-        hnd: SubmissionHandler,
+        db: redis.Redis,
         msg_builder: MessageBuilder
     ):
         self.cfg = cfg
-        self.hnd = hnd
+        self.post_db = DataStore(db, Submission)
+        self.activity_db = DataStore(db, Activity)
         self.msg_bld = msg_builder
         self.reddit = SubredditTool(cfg)
         self.analyzer = PostAnalyzer(cfg.series_flair_name)
+        self.cache_ttl = cfg.post_timelimit * 2
+        self.latest_post = None
 
     def reject_by_timelimit(self, post: praw.models.Submission) -> bool:
         """Determine if a submission should be removed based on a time-limit
@@ -191,15 +194,16 @@ class AutoBot:
         if not self.cfg.enforce_timelimit:
             return False
 
+        now = int(time.time())
+        if (now - post.created_utc) > self.cfg.post_timelimit:
+            return False
+
         rejected = False
-        most_recent = min(
-            self.reddit.get_redditor_posts(post.author),
-            key=attrgetter("created_utc"),
-            default=None
-        )
-        if most_recent and most_recent.id != post.id:
-            time_diff = post.created_utc - most_recent.created_utc
-            allowed_when = self.cfg.post_timelimit - time_diff
+        # look in the cache to see if this user has recent activity
+        act = self.activity_db.get(post.author.name)
+        if act and act.last_post_id != post.id:
+            td = post.created_utc - int(act.last_post_time.timestamp())
+            allowed_when = self.cfg.post_timelimit - td
             if allowed_when > 0:
                 rejected = True
                 human_fmt = englishify_time(allowed_when)
@@ -207,10 +211,10 @@ class AutoBot:
                     "reason": "time limit",
                     "permanent": True,
                     "post_id": post.id,
-                    "old_post_id": most_recent.id,
+                    "old_post_id": act.last_post_id,
                     "author": post.author.name,
                     "post_timestamp": post.created_utc,
-                    "old_post_timestamp": most_recent.created_utc,
+                    "old_post_timestamp": act.last_post_time.timestamp(),
                     "can_post_in": allowed_when,
                 }
                 logger.info("Rejecting post and notifying author", **log_params)
@@ -261,150 +265,187 @@ class AutoBot:
             invalid_tags=post_meta.bad_tags()
         )
 
-    def process_posts(self, restrict_to_sub: bool = True):
-        cache_ttl = self.cfg.post_timelimit * 2
+    def post_series_reminder(self, submission: praw.models.Submission) -> None:
+        """Convenience method that posts the 'this is a series' comment
+        on submissions."""
+        series_comment = self.gen_series_reminder(submission)
+        self.reddit.post_series_reminder(submission, series_comment)
 
+    def send_series_pm(self, submission: praw.models.Submission) -> None:
+        """Convenience method that DMs an author the series reminder text."""
+        msg = self.msg_bld.create_series_msg(submission.shortlink)
+        self.reddit.send_series_pm(submission, msg)
+
+    def cache_activity_maybe(self, submission: praw.models.Submission) -> None:
+        # only store activity if the post was created in the timelimit
+        tl = self.cfg.post_timelimit
+        now = int(time.time())
+        if (diff := now - submission.created_utc) < tl:
+            activity = Activity(
+                author=submission.author.name,
+                subreddit=submission.subreddit.display_name,
+                last_post_id=submission.name,
+                last_post_time=submission.created_utc
+            )
+            ttl = tl - int(diff)
+            logger.info("Caching activity", info=activity, ttl=ttl)
+            self.activity_db.persist(activity.author, activity, ttl=ttl)
+        else:
+            logger.info("Not caching activity for post outside timelimit",
+                        author=submission.author.name,
+                        subreddit=submission.subreddit.display_name,
+                        id=submission.name)
+
+    def process_previous(self, restrict_to_sub: bool = True):
         # for all submissions, check to see if any of them should be rejected
         # based on the time limit.
         # Get all recent submissions and then sort them into ascending order
         # As each submission is processed, check it against a user's new posts
         # in descending posted order
         posts = sorted(
-            self.reddit.get_recent_posts(),
+            self.reddit.search_recent_posts(),
             key=attrgetter("created_utc")
         )
 
         logger.info(
-            "Processing posts from last hour",
+            "Processing previous posts from last hour",
             subreddit=self.reddit.subreddit_name(),
             posts_found=len(posts)
         )
 
-        # prevent issue 102 from happening
-        if restrict_to_sub:
-            bad, posts = partition(
-                lambda _: _.subreddit.display_name == self.reddit.subreddit_name(),
-                posts
+        cached_res = self.post_db.get_many([p.id for p in posts])
+
+        for p, cached in zip(posts, cached_res):
+            if not cached:
+                logger.info("Skipping unprocessed post", submission=p.id)
+                continue
+
+            # if we already have a submission in storage, we care about:
+            # 1. Checking if the submission isn't marked as 'series'
+            # 2. If it hasn't been, check if the post is a 'series' flair
+            # 3. If it is a series, then update the series property
+            # 4. And then we want to send PMs
+            logger.info(
+                "Processing previously seen submission",
+                post_id=p.id,
+                author=p.author.name
             )
-            inv = " ".join((f"{p.subreddit.display_name}/{p.id}" for p in bad))
-            if inv:
-                logger.warn(
-                    "Search returned posts from other subreddits!",
-                    invalid_posts=inv
-                )
+            # Do processing on previous submissions to see if we need to
+            # add the series message if we saw this before and it's not a
+            # series but then later flaired as one, send the message
+            if not cached.series:
+                try:
+                    if p.link_flair_text.lower() == self.cfg.series_flair_name.lower():
+                        logger.info(
+                            "Post was flaired 'Series' after the fact. Posting message",
+                            post_id=p.id
+                        )
 
-        for p in posts:
-            post_series_comment = False
-            send_series_pm = False
-            if sub := self.hnd.get(p.id):
-                # if we already have a submission in storage, we care about:
-                # 1. Checking if the submission isn't marked as 'series'
-                # 2. If it hasn't been, check if the post is a 'series' flair
-                # 3. If it is a series, then update the series property
-                # 4. And then we want to send PMs
-                logger.info(
-                    "Processing previously seen submission",
-                    post_id=p.id,
-                    author=p.author.name
-                )
-                # Do processing on previous submissions to see if we need to
-                # add the series message if we saw this before and it's not a
-                # series but then later flaired as one, send the message
-                if not sub.series:
-                    try:
-                        if p.link_flair_text.lower() == self.cfg.series_flair_name.lower():
-                            logger.info(
-                                "Post was flaired 'Series' after the fact. Posting message",
-                                post_id=p.id
-                            )
+                        self.post_series_reminder(p)
+                        self.send_series_pm(p)
 
-                            sub.series = True
-                            post_series_comment = True
-                            send_series_pm = True
-                            sub.sent_series_pm = True
-                            self.hnd.update(sub)
-                    except AttributeError:
-                        pass
+                        cached.series = True
+                        cached.sent_series_pm = True
+                        self.post_db.update(cached.id, cached)
+                except AttributeError:
+                    pass
+
+    def fetch_new(self) -> None:
+        """This method uses the subreddit/new API to get new submissions.
+        /new has submissions immediately upon posting, so this endpoint is
+        better for retrieving posts immediately, as /search incurs a time
+        delay due to indexing."""
+        listing = sorted(
+            self.reddit.retrieve_new_posts(before=self.latest_post),
+            key=attrgetter("created_utc")
+        )
+        cached_res = self.post_db.get_many([s.id for s in listing])
+        for s, cached in zip(listing, cached_res):
+            if cached:
+                logger.info("Skipping previously seen post", submission=s.id)
+                continue
+
+            # prevention for issue 102
+            if s.subreddit.display_name != self.reddit.subreddit_name():
+                logger.warn("Found post from other subreddit!",
+                            subreddit=s.subreddit.display_name,
+                            submission=s.id)
+                continue
+
+            sub = Submission(
+                id=s.id,
+                author=s.author.name,
+                submitted=s.created_utc
+            )
+            extra_log: dict[str, Any] = {}
+
+            if self.reject_by_timelimit(s):
+                sub.deleted = True
             else:
-                sub = Submission(
-                    id=p.id,
-                    author=p.author.name,
-                    submitted=p.created_utc
-                )
+                # Here we want all the formatting and tag issues
+                meta = self.analyzer.analyze(s)
+                extra_log["invalid_tags"] = meta.invalid_tags
+                extra_log["has_nsfw_title"] = meta.has_nsfw_title
+                extra_log["has_codeblocks"] = meta.has_codeblocks
+                extra_log["has_long_paragraphs"] = meta.has_long_paragraphs
+                extra_log["series_finale"] = meta.is_final
 
-                extra_log: dict[str, Any] = {}
-
-                if self.reject_by_timelimit(p):
+                if meta.is_invalid():
+                    # We have bad (tags|title) - Delete post and send PM.
+                    msg = self.prepare_delete_message(s, meta)
+                    self.reddit.add_comment(
+                        s,
+                        msg,
+                        distinguish=True,
+                        sticky=True
+                    )
+                    self.reddit.delete_post(s)
                     sub.deleted = True
                 else:
-                    # Here we want all the formatting and tag issues
-                    meta = self.analyzer.analyze(p)
-                    extra_log["invalid_tags"] = meta.invalid_tags
-                    extra_log["has_nsfw_title"] = meta.has_nsfw_title
-                    extra_log["has_codeblocks"] = meta.has_codeblocks
-                    extra_log["has_long_paragraphs"] = meta.has_long_paragraphs
-                    extra_log["series_finale"] = meta.is_final
+                    # this post is valid, cache the activity
+                    # data
+                    self.cache_activity_maybe(s)
 
-                    if meta.is_invalid():
-                        # We have bad (tags|title) - Delete post and send PM.
-                        msg = self.prepare_delete_message(p, meta)
-                        self.reddit.add_comment(
-                            p,
-                            msg,
-                            distinguish=True,
-                            sticky=True
-                        )
-                        self.reddit.delete_post(p)
-                        sub.deleted = True
-                    elif meta.is_serial():
-                        # don't send PMs if this is final
-                        if not meta.is_final:
-                            # Post the remindme bot message
-                            post_series_comment = True
-                            send_series_pm = True
-                            sub.sent_series_pm = True
-
+                    if meta.is_serial():
                         # set the series flair for this post
-                        self.reddit.set_series_flair(p)
+                        self.reddit.set_series_flair(s)
                         sub.series = True
 
-                logger.info(
-                    "Processed post",
-                    submission=json.loads(sub.json()),
-                    **extra_log
-                )
-                self.hnd.persist(sub, ttl=cache_ttl)
+                        # don't send PMs if this is final
+                        if not meta.is_final:
+                            self.post_series_reminder(s)
+                            self.send_series_pm(s)
+                            sub.sent_series_pm = True
 
-            # end of else
-            if post_series_comment:
-                series_comment = self.gen_series_reminder(p)
-                self.reddit.post_series_reminder(p, series_comment)
+            if not sub.deleted:
+                # this needs to not be set to a deleted post because
+                # using the 'before' param with a deleted post returns
+                # empty results
+                self.latest_post = s
 
-            if send_series_pm:
-                # We have series tags in place. Send a PM
-                self.reddit.send_series_pm(
-                    p,
-                    self.msg_bld.create_series_msg(p.shortlink)
-                )
+            logger.info(
+                "Processed post",
+                submission=json.loads(sub.json()),
+                **extra_log
+            )
+            self.post_db.persist(sub.id, sub, ttl=self.cache_ttl)
 
-    def run(self, forever: bool = False, interval: int = 300):
+    def run(self, forever: bool = False, interval: int = 15):
         """Run the autobot to find posts. Can be specified to run `forever`
         at `interval` seconds per run."""
-
         bot_start_time = time.time()
-
         while True:
-            try:
-                self.process_posts()
-            except Exception:
-                logger.exception("bot:run")
-                rollbar.report_exc_info()
+            self.fetch_new()
+            self.process_previous()
 
             if not forever:
                 break
 
             run_interval = (time.time() - bot_start_time) % float(interval)
-            sleep_interval = float(interval) - run_interval
+            sleep_interval = interval - int(run_interval)
 
-            logger.info(f"Sleeping until next run.", sleep_seconds=sleep_interval)
+            logger.info(
+                "Sleeping until next run.",
+                sleep_seconds=sleep_interval
+            )
             time.sleep(sleep_interval)
