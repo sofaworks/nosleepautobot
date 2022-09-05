@@ -1,7 +1,7 @@
 name: Fly Staging Deploy
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 env:
   FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
