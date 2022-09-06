@@ -1,4 +1,10 @@
-## NoxBot
+## nosleepautobot
+
+## Deploy Status
+
+| Environment | Status |
+|-------------|--------|
+| `staging`   | [![fly.io Staging](https://github.com/sofaworks/nosleepautobot/actions/workflows/deploy.staging.yml/badge.svg?branch=master)](https://github.com/sofaworks/nosleepautobot/actions/workflows/deploy.staging.yml) |
 
 ## Build Status
 
@@ -7,62 +13,66 @@
 | `heroku` | [![CircleCI Heroku branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/heroku.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/heroku) |
 | `master` | [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master) |
 
-## What is NoxBot?
+## What is nosleepautobot?
 
-NoxBot is the bot script currently associated with reddit user /u/NoSleepAutoBot and is used to perform several automatic moderator tasks on /r/NoSleep that are too complex for reddit's own AutoMod.
+nosleepautobot is the bot script currently associated with reddit user /u/NoSleepAutoBot and is used to perform several automatic moderator tasks on /r/NoSleep that are too complex for reddit's own AutoMod.
 
-## What does NoxBot do?
+## What does nosleepautobot do?
 
-NoxBot performs several moderator tasks automatically that would otherwise be annoying to do manually.
+nosleepautobot performs several moderator tasks automatically that would otherwise be annoying to do manually.
 
-* **NoxBot performs checks for NoSleep's 24-hour rule.**
+* **nosleepautobot performs checks for NoSleep's 24-hour rule.**
 
-   Users on NoSleep are only allowed to post once every 24 hours. NoxBot checks each new post's author's history to make sure they haven't posted to the subreddit in the last 24-hours. If they have, NoxBot removes the post and makes a comment on the post informing the author of the rule and telling them the time until they can next post.
-* **NoxBot performs checks for NoSleep's title tags rules.**
+   Users on NoSleep are only allowed to post once every 24 hours. nosleepautobot checks each new post's author's history to make sure they haven't posted to the subreddit in the last 24-hours. If they have, nosleepautobot removes the post and makes a comment on the post informing the author of the rule and telling them the time until they can next post.
+* **nosleepautobot performs checks for NoSleep's title tags rules.**
 
-  NoSleep has strict rules about what sorts of "tags" (things in braces/brackets) can be used in the titles of posts. In short, the only thing allowed in title tags is the part of the story if the story is a series (ex. [Part 1]). NoxBot checks each post for tags and uses a complex regex to determine if the tags are valid or not. If the tags are *not* valid, it removes the post from NoSleep and makes a comment on the post telling the user what happened and informing them of the rule.
+  NoSleep has strict rules about what sorts of "tags" (things in braces/brackets) can be used in the titles of posts. In short, the only thing allowed in title tags is the part of the story if the story is a series (ex. [Part 1]). nosleepautobot checks each post for tags and uses a complex regex to determine if the tags are valid or not. If the tags are *not* valid, it removes the post from NoSleep and makes a comment on the post telling the user what happened and informing them of the rule.
 
-* **NoxBot checks for long paragraphs in posts**
+* **nosleepautobot checks for long paragraphs in posts**
 
   User submissions that contain paragraphs considered 'exceedingly long' (in this case, meaning the submission has a paragraph containing over 350 words) are flagged and temporarily removed. A private message is sent to the author alerting them to update their formatting and submit their post for reapproval.
 
-* **NoxBot checks for code blocks in posts**
+* **nosleepautobot checks for code blocks in posts**
 
-  Generally, code blocks do not belong in NoSleep submissions. They are typically the byproduct of users writing their stories in another software such as Microsoft Word and using `Tab` characters, which translate to `<pre>` and `<code>` blocks in Markdown. This results in unreadable blocks of text in the resulting submission. NoxBot will temporarily remove posts containing such blocks of text and send a private message to the submission author alerting them to fix their formatting and submit their post for reapproval.
+  Generally, code blocks do not belong in NoSleep submissions. They are typically the byproduct of users writing their stories in another software such as Microsoft Word and using `Tab` characters, which translate to `<pre>` and `<code>` blocks in Markdown. This results in unreadable blocks of text in the resulting submission. nosleepautobot will temporarily remove posts containing such blocks of text and send a private message to the submission author alerting them to fix their formatting and submit their post for reapproval.
 
-* **NoxBot provides information/rule reminders via PM to authors when they post a new part of a series.**
+* **nosleepautobot provides information/rule reminders via PM to authors when they post a new part of a series.**
 
-  If NoxBot detects valid "series" tags in a post title, it will PM the author of the story (via the /r/NoSleepAutoBot user itself) and remind them that they should double-check the flair on their post, and link back to previous parts of the story. This is not a reprimand in any way -- rather, it is a friendly reminder for series posts.
+  If nosleepautobot detects valid "series" tags in a post title, it will PM the author of the story (via the /r/NoSleepAutoBot user itself) and remind them that they should double-check the flair on their post, and link back to previous parts of the story. This is not a reprimand in any way -- rather, it is a friendly reminder for series posts.
 
-* **NoxBot flairs things as "series" when it detects a post is a series.**
+* **nosleepautobot flairs things as "series" when it detects a post is a series.**
 
-  If NoxBot detects valid "series" tags in a post title, it will flair the post as a `Series`.
+  If nosleepautobot detects valid "series" tags in a post title, it will flair the post as a `Series`.
 
-## Who takes care of NoxBot live and where does it live?
+* **nosleep autobot generates moderator activity reports**
 
-NoxBot was written by reddit user [`/u/SofaAssassin`](https://np.reddit.com/u/SofaAssassin). It is maintained by `/u/SofaAssassin` and [`/u/Himekat`](https://np.reddit.com/u/Himekat) (a NoSleep mod).
+## Who takes care of nosleepautobot live and where does it live?
 
-## NoxBot in Production
+nosleepautobot was originally written by reddit user [`/u/SofaAssassin`](https://np.reddit.com/u/SofaAssassin). It is maintained by `/u/SofaAssassin` and [`/u/Himekat`](https://np.reddit.com/u/Himekat) (a NoSleep mod).
 
-NoxBot is scheduled to **run every 2 minutes**. When it runs, it checks the last hour's worth of posts. It also has a caching mechanism in the background that ensures it won't double-count things or do extra work. If the process running NoxBot ever dies, it will automatically restart, so hopefully this will prevent it from being flaky or unresilient.
+## nosleepautobot in Production
 
-NoxBot is hosted on and run from **Heroku** (off the `heroku` branch), utilizes **Redis** for caching, is continuously deployed via **CircleCI**, and has informational/error logging with **PaperTrail** and **Rollbar**.
+1. The bot checks for new posts every 30 seconds, using the `/new` API endpoint
+2. The bot also uses a look-behind of one hour using the `/search` API endpoint, to identify posts that may have been tagged "Series" after the fact
+3. Data for the purposes of enforcing time limits and to prevent double-processing submissions is cached.
+
+The canonical nosleepautobot is hosted on and run from fly.io (off the `flymetothemoon` branch), utilizes Redis for caching, and is continuously deployed using Github Actions.
 
 ## What if I have problems or new feature ideas?
 
-If you have any issues with NoxBot or feature/enhancement requests, please make an issue on [NoxBot's Github Issues](https://github.com/sofaworks/nosleepautobot/issues) page.
+If you have any issues with nosleepautobot or feature/enhancement requests, please make an issue on [nosleepautobot's Github Issues](https://github.com/sofaworks/nosleepautobot/issues) page.
 
-If your issue is not getting attention, please tag or assign the issue to @leikahing as he will likely take care of it.
+If your issue is not getting attention, please tag or assign the issue to [@leikahing](https://github.com/leikahing) as he will likely take care of it.
 
 If you really need critical attention, please PM /u/Himekat or /u/SofaAssassin on Reddit.
 
-## How to install and run NoxBot?
-_Running NoxBot assumes you already have done the [Reddit OAuth2 quickstart](https://github.com/reddit/reddit/wiki/OAuth2-Quick-Start-Example)_
+## How to install and run nosleepautobot?
+_Running nosleepautobot assumes you already have done the [Reddit OAuth2 quickstart](https://github.com/reddit/reddit/wiki/OAuth2-Quick-Start-Example)_
 
-NoxBot is written and tested with Python 3.10.x. After you have checked out the source code, you can do the following to start the bot.
+nosleepautobot is written and tested with Python 3.10.x. After you have checked out the source code, you can do the following to start the bot.
 
 ```
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
@@ -71,9 +81,9 @@ pip install -r requirements.txt
 python run_bot.py
 ```
 
-### NoxBot execution flags
+### nosleepautobot execution flags
 
-NoxBot supports a number of flags for running, just type `python run_bot.py --help` to display a help message with all the supported flags.
+nosleepautobot supports some options for running, just type `python3 run_bot.py --help` to display a help message with all the current options.
 
 	usage: run_bot.py [-h] [-c CONF] [--forever] [-i INTERVAL]
 
@@ -84,9 +94,13 @@ NoxBot supports a number of flags for running, just type `python run_bot.py --he
 	                        How many seconds to wait between bot execution cycles.
 	                        Only used if "forever" is specified.
 
-### NoxBot Environment Variable-based Configuration
+### nosleepautobot Environment Variable-based Configuration
 
-The bot reads the following environment variables for configuration.
+Depending on how you want to deploy and run the bot, it can be configured one of two ways.
+
+The first method is to configure the variables in `autobot.env` file. An example `autobot.env.sample` is included that you can rename and configure.
+
+Alternatively, the bot supports the following environment variables.
 
 | Setting Name | Description | Required? |
 | ------------ | ----------- | --------- |
@@ -100,24 +114,23 @@ The bot reads the following environment variables for configuration.
 | `AUTOBOT_SUBREDDIT` | Subreddit to run bot against. Specified user **has to be a moderator** of the subreddit. | Yes |
 | `REDIS_URL` | Redis URL | Yes |
 
-Configuration settings can also be specified via a `autobot.env` file. An example `autobot.env.sample` is included that you can rename and configure.
 
-## Developing NoxBot
+## Developing nosleepautobot
 
-In case anyone wants to write code for NoxBot (or just as a reminder to me).
+In case anyone wants to write code for nosleepautobot (or just as a reminder to me).
 
 ### Set Up
 
-**Python 2.x support has been removed as Python 2.x [has been EOL'ed as of January 1, 2020](https://www.python.org/doc/sunset-python-2/).**
+Python 3.10+ is required for the source code due to the usage of some new syntax (e.g. union types).
 
-python3's `venv` module is highly recommended.
+Python 3's [`venv`](https://docs.python.org/3/library/venv.html) module is highly recommended.
 
 Set up would look akin to this...
 
 ```
 git clone git@github.com:sofaworks/nosleepautobot.git
 cd nosleepautobot
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 
 # We use a dev version of the requirements.txt which includes
@@ -130,13 +143,13 @@ pip install -r requirements.dev.txt
 The bot has a set of unit tests in `autobot/tests` which can be executed with:
 
 ```
-python -m unittest discover autobot/tests
+python3 -m unittest discover autobot/tests
 ```
 
 Your tests should pass!
 
 ```
-(venv) nosleepautobot [master] > python -m unittest discover autobot/tests
+(venv) nosleepautobot [master] > python3 -m unittest discover autobot/tests
 ..................
 ----------------------------------------------------------------------
 Ran 18 tests in 0.005s
