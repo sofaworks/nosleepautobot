@@ -18,7 +18,3 @@ processes = []
 [experimental]
   allowed_public_ports = []
   auto_rollback = true
-
-[processes]
-  worker = "python3 run_bot.py --forever --interval 30"
-  report = "python3 run_report_service.py"
