@@ -21,5 +21,4 @@ processes = []
 
 [processes]
   worker = "python3 run_bot.py --forever --interval 30"
-  #modreport = "python3 autobot/tools/track_mod_activity.py"
-  #on_demand_report = "python3 moderation/activity_tracker.py ondemand"
+  report = "python3 run_report_service.py"

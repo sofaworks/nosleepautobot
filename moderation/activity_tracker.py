@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 
-# This creates a class for reporting moderator activity
-
-
-
 from collections import defaultdict
 import os
 import sys
@@ -12,7 +8,6 @@ import time
 import logging
 import datetime
 import argparse
-import itertools
 
 import praw
 import requests
@@ -60,7 +55,7 @@ def total_posts_in_range(subreddit, begin, end):
     """A wrapper around the PushShift API to get total number of posts in a
     particular subreddit for between `begin` and `end`. The dates are
     inclusive.
-   
+
     PushShift will return a JSON doc that looks like this, with data keyed by
     Unix timestamp (in UTC) and the number of submissions on that day.
 
@@ -130,8 +125,10 @@ def valid_date(d):
 def parser_raise(message):
     raise Exception(message)
 
+
 def command_parser():
-    '''Generates a parser that will be used for the comamnds that can be sent in PM'''
+    """Generates a parser that will be used for the commands that can
+    be sent in PM"""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='Moderator actions', dest='command')
     activity_parser = subparsers.add_parser('activity', help='Generate activity report for moderators')

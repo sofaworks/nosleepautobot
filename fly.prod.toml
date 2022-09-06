@@ -13,11 +13,12 @@ processes = []
   AUTOBOT_ENFORCE_TIMELIMIT = "true"
   AUTOBOT_SUBREDDIT = "nosleep"
   AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220903 (by /u/SofaAssassin)"
-  DEVELOPMENT_MODE = "false"
+  DEVELOPMENT_MODE = "true"
 
 [experimental]
   allowed_public_ports = []
   auto_rollback = true
 
 [processes]
-  worker = "python3 run_bot.py --forever --interval 30
+  worker = "python3 run_bot.py --forever --interval 30"
+  report = "python3 run_report_service.py"
