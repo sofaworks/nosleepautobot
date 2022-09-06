@@ -12,7 +12,6 @@ from autobot.config import Settings
 from autobot.util.messages.templater import MessageBuilder
 
 import redis
-import rollbar
 import structlog
 
 
@@ -64,11 +63,6 @@ def uncaught_ex_handler(ex_type, value, tb) -> None:
     log.critical("Got an uncaught exception")
     log.critical("".join(traceback.format_tb(tb)))
     log.critical(f"{ex_type}: {value}")
-    rollbar.report_exc_info()
-
-
-def init_rollbar(token: str, environment: str) -> None:
-    rollbar.init(token, environment)
 
 
 def transform_and_roll_out() -> None:
@@ -85,9 +79,6 @@ def transform_and_roll_out() -> None:
     args = parser.parse_args()
 
     settings = Settings()
-
-    if settings.rollbar_token:
-        init_rollbar(settings.rollbar_token, settings.rollbar_env)
 
     rd = redis.Redis.from_url(settings.redis_url, decode_responses=True)
     cd = Path(__file__).resolve().parent

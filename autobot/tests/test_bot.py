@@ -134,7 +134,6 @@ class TestBotMethods(TestCase):
         self.assertFalse(final, "Should be final but isn't")
         self.assertEqual(len(bad_tags), 1, f"Unexpected bad tags: {bad_tags}")
 
-
     def test_update_tags(self):
         """Test that tags like 'Update #3' and 'Update 99' are allowed"""
         analyzer = PostAnalyzer("Series")
@@ -196,33 +195,6 @@ class TestBotMethods(TestCase):
         with mock.patch.dict(os.environ, cfg, clear=True):
             s = Settings(_env_file=None)
             self.assertEqual(s.post_timelimit, timeout)
-            self.assertIsNone(s.rollbar_token)
-
-    def test_redis_config_override(self):
-        """Test that we can use rediscloud_url or redis_url with priority."""
-        cloud_url = "redis://user:pass@127.0.0.1:7000/1"
-        local_url = "redis://user:pass@localhost:6379/1"
-        cfg = {
-            "autobot_post_timelimit": "1",
-            "autobot_user_agent": "a-user-agent",
-            "autobot_enforce_timelimit": "true",
-            "autobot_reddit_username": "username",
-            "autobot_reddit_password": "password",
-            "autobot_subreddit": "nosleep",
-            "autobot_client_id": "client-id",
-            "autobot_client_secret": "client-secret",
-            "redis_url": local_url
-        }
-        with mock.patch.dict(os.environ, cfg, clear=True):
-            s = Settings(_env_file=None)
-            self.assertEqual(s.redis_url, local_url)
-            del os.environ["redis_url"]
-
-            # NB Python 3.x dict is ordered
-            os.environ["rediscloud_url"] = cloud_url
-            os.environ["redis_url"] = local_url
-            t = Settings(_env_file=None)
-            self.assertEqual(t.redis_url, cloud_url)
 
     @mock.patch("praw.Reddit", autospec=True)
     def test_generate_modmail_link(self, reddit_mock):
