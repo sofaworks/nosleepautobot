@@ -141,7 +141,7 @@ class ReportService:
         self.reddit.inbox.mark_read(mark_queue)
 
     def run_weekly_report(self) -> None:
-        key = "reportservice.weekly.last_run"
+        key = f"reportservice.{self.subreddit.display_name}.weekly.last_run"
         start, now = self.get_ts()
         last_run = self.redis.get(key)
         if not last_run or int(last_run) < int(start.timestamp()):
