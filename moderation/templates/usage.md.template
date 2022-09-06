@@ -1,0 +1,34 @@
+----
+
+Did you forgot how to use me? Here are things I can do for you.
+
+## Get Moderator Activity
+
+Send a message entitled "Moderator Activity" to me with one of the following
+commands as the first line of the message.
+
+The possible commands are described in detail below.
+
+### Get Moderator Activity
+
+* `activity all` - Get a report of all moderator activities for the current month.
+* `activity USERNAME` - Get a report for a moderator or list of moderators. Separate multiple moderators by spaces or commas.
+
+You can also specify `--start` and `--end` with dates in YEAR-MONTH-DAY FORMAT to get moderator activities
+within that date range. Some examples are...
+
+* `activity --start 2022-05-10 --end 2022-05-12 all` - Get a report of all moderator activities between May 10 and May 12, 2022.
+* `activity --start 2022-05-10 --end 2022-05-12 USER1,USER2,USER3,USER4` - Get a report of specific moderators' actviities between May 10 and May 12, 2022. Separate multiple users by spaces or commas.
+
+### Get Post Activity Report
+
+**Note that due to how Reddit works, you will only have luck doing this for probably the last month.**
+
+* `posts --start YEAR-MONTH-DAY --end YEAR-MONTH-DAY` - Get a post report between the specified days, with total posts and moderator post actions take during that timeframe.
+
+Examples of this command are...
+
+* `posts --start 2022-08-01 --end 2022-08-31` - Get a post report for all days from August 1 - August 31, 2022
+* `posts --start 2022-08-10 --end 2022-08-11` - Get a post report for days from August 10 - August 11, 2022
+* `posts --start 2022-08-10 --end 2022-08-10`  - Get a post report for August 10, 2022
+

@@ -1,0 +1,12 @@
+<%doc>Message sent to each moderator for their periodic report.</%doc>
+Hi there ${moderator}! Here are your total mod actions from **${begin.strftime("%B %d %Y")}** to **${end.strftime("%B %d %Y")}**:
+
+* **Post Approvals**: ${approvelink}
+* **Post Removals**: ${removelink}
+* **Comment Approvals**: ${approvecomment}
+* **Comment Removals**: ${removecomment}
+* **Days Active**: ${active_days}
+
+Friendly reminder to meet your minimums for the month!
+
+**NOTE** If you have over 1000 actions in any category for the month, don't expect the value above to be correct. Thanks, Reddit.
