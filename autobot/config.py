@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     user_agent: str
     series_flair_name: str = "series"
     redis_url: Annotated[RedisDsn, Field(env="redis_url")]
+    logtail_token: Annotated[str | None, Field(env="logtail_token")] = None
 
     class Config:
         case_sensitive = False

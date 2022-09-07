@@ -11,6 +11,8 @@ from autobot.autobot import AutoBot
 from autobot.config import Settings
 from autobot.util.messages.templater import MessageBuilder
 
+from logtail import LogtailHandler
+
 import redis
 import structlog
 
@@ -66,6 +68,8 @@ def uncaught_ex_handler(ex_type, value, tb) -> None:
 
 
 def transform_and_roll_out() -> None:
+    settings = Settings()
+
     configure_structlog()
     logging.basicConfig(
         format="%(message)s",
@@ -75,10 +79,13 @@ def transform_and_roll_out() -> None:
     log = structlog.get_logger()
     sys.excepthook = uncaught_ex_handler
 
+    if settings.logtail_token:
+        root_log = logging.getLogger()
+        lth = LogtailHandler(source_token=settings.logtail_token)
+        root_log.addHandler(lth)
+
     parser = create_argparser()
     args = parser.parse_args()
-
-    settings = Settings()
 
     rd = redis.Redis.from_url(settings.redis_url, decode_responses=True)
     cd = Path(__file__).resolve().parent
