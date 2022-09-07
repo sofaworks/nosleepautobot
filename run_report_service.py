@@ -46,4 +46,4 @@ if __name__ == '__main__':
     cd = Path(__file__).resolve().parent
     td = cd / "moderation" / "templates"
     svc = ReportService(cfg, td, log)
-    svc.gen_all_reports()
+    svc.run(interval=600)

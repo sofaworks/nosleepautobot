@@ -117,6 +117,7 @@ class ReportService:
     def process_adhoc_requests(self) -> None:
         mark_queue = []
         reqs = defaultdict(list)
+        template = self.mako.get_template(self.individual_template)
         for msg in self.reddit.inbox.unread(limit=None):
             if (not msg.author
                     or msg.author.name.lower() not in self.moderators):
@@ -135,8 +136,11 @@ class ReportService:
         # process all of a moderator's requests as a single unit
         for mod, msgs in reqs.items():
             self.log.info("Processing ad-hoc activity request", moderator=mod)
-            report = self.generate_summary(mod.name)
-            mod.message(subject="Your requested activity", message=report)
+            activity = self.generate_summary(mod.name)
+            mod.message(
+                subject=f"Your requested activity for /r/{self.subreddit.display_name}",
+                message=template.render(**dataclasses.asdict(activity))
+            )
             mark_queue.extend(msgs)
         self.reddit.inbox.mark_read(mark_queue)
 
@@ -160,6 +164,7 @@ class ReportService:
         schedule.every().friday.at("12:01").do(self.run_weekly_report)
 
         while True:
-            self.log.info("Running pending report jobs.")
+            self.log.info("[report service] Running pending report jobs.")
             schedule.run_pending()
+            self.log.info("[report service] Sleeping the report service.")
             time.sleep(interval)
