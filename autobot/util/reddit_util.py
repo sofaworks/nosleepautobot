@@ -45,6 +45,16 @@ class SubredditTool:
         )
         return r
 
+    def is_post_deleted(self, post_id: str) -> bool:
+        submission = self.reddit.submission(post_id)
+        if (
+            submission.removed
+            or not submission.author
+            or not submission.is_robot_indexable
+        ):
+            return True
+        return False
+
     def retrieve_new_posts(
         self,
         *,
@@ -58,12 +68,7 @@ class SubredditTool:
         # safety check in case the 'before' got deleted between
         # the last time we used it
         if before:
-            submission = self.reddit.submission(before.id)
-            if (
-                    submission.removed
-                    or not submission.author
-                    or not submission.is_robot_indexable
-            ):
+            if self.is_post_deleted(before.id):
                 self.logger.info(
                     "Post was removed, not using 'before' parameter",
                     subreddit=before.subreddit.display_name,

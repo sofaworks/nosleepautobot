@@ -201,7 +201,11 @@ class AutoBot:
         rejected = False
         # look in the cache to see if this user has recent activity
         act = self.activity_db.get(post.author.name)
-        if act and act.last_post_id != post.id:
+        if (
+            act
+            and act.last_post_id != post.id
+            and not self.reddit.is_post_deleted(act.last_post_id)
+        ):
             td = post.created_utc - int(act.last_post_time.timestamp())
             allowed_when = self.cfg.post_timelimit - td
             if allowed_when > 0:
