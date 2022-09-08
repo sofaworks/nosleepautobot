@@ -5,12 +5,13 @@
 | Environment | Status |
 |-------------|--------|
 | `staging`   | [![fly.io Staging](https://github.com/sofaworks/nosleepautobot/actions/workflows/deploy.staging.yml/badge.svg?branch=master)](https://github.com/sofaworks/nosleepautobot/actions/workflows/deploy.staging.yml) |
+| `prod`   | [![fly.io Staging](https://github.com/sofaworks/nosleepautobot/actions/workflows/deploy.prod.yml/badge.svg?branch=flymetothemoon)](https://github.com/sofaworks/nosleepautobot/actions/workflows/deploy.prod.yml) |
 
 ## Build Status
 
 | Branch | Status |
 |--------|--------|
-| `heroku` | [![CircleCI Heroku branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/heroku.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/heroku) |
+| `flymetothemoon` | [![CircleCI Prod branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/flymetothemoon.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/flymetothemoon) |
 | `master` | [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master) |
 
 ## What is nosleepautobot?

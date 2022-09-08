@@ -1,12 +1,12 @@
 # Changelog
 
-This is a changelog of changes that ship to production.
+This is a changelog of important/interesting things that go into production releases.
 
-## Unreleased (estimated August 19 2022)
+## 2022-09-09
 
 ### Added
 
-* Add a development mode that is read-only
+* Add a development mode that is read-only using `DEVELOPMENT_MODE` setting
 
 ### Changed
 
