@@ -2,7 +2,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from operator import attrgetter
 from typing import Any
-import itertools
 import json
 import re
 import time
@@ -18,12 +17,6 @@ import structlog
 
 
 logger = structlog.get_logger()
-
-
-def partition(cond, it):
-    """Partition a list in twain based on cond."""
-    x, y = itertools.tee(it)
-    return itertools.filterfalse(cond, x), filter(cond, y)
 
 
 def englishify_time(seconds: float) -> str:
@@ -300,7 +293,7 @@ class AutoBot:
                         subreddit=submission.subreddit.display_name,
                         id=submission.name)
 
-    def process_previous(self, restrict_to_sub: bool = True):
+    def process_previous(self):
         # for all submissions, check to see if any of them should be rejected
         # based on the time limit.
         # Get all recent submissions and then sort them into ascending order
@@ -329,7 +322,7 @@ class AutoBot:
             # 2. If it hasn't been, check if the post is a 'series' flair
             # 3. If it is a series, then update the series property
             # 4. And then we want to send PMs
-            logger.info(
+            logger.debug(
                 "Processing previously seen submission",
                 post_id=p.id,
                 author=p.author.name
@@ -366,7 +359,7 @@ class AutoBot:
         cached_res = self.post_db.get_many([s.id for s in listing])
         for s, cached in zip(listing, cached_res):
             if cached:
-                logger.info("Skipping previously seen post", submission=s.id)
+                logger.debug("Skipping previously seen post", submission=s.id)
                 continue
 
             # prevention for issue 102
