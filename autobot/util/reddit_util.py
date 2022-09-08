@@ -3,7 +3,7 @@ import urllib.parse
 
 from autobot.config import Settings
 
-from praw.errors import NotFound
+from prawcore import NotFound
 
 import praw
 import structlog
