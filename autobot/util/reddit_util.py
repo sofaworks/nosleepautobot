@@ -59,7 +59,11 @@ class SubredditTool:
         # the last time we used it
         if before:
             submission = self.reddit.submission(before.id)
-            if submission.removed:
+            if (
+                    submission.removed
+                    or not submission.author
+                    or not submission.is_robot_indexable
+            ):
                 self.logger.info(
                     "Post was removed, not using 'before' parameter",
                     subreddit=before.subreddit.display_name,
