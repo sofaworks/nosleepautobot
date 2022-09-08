@@ -3,6 +3,8 @@ import urllib.parse
 
 from autobot.config import Settings
 
+from praw.errors import NotFound
+
 import praw
 import structlog
 
@@ -47,12 +49,19 @@ class SubredditTool:
 
     def is_post_deleted(self, post_id: str) -> bool:
         submission = self.reddit.submission(post_id)
-        if (
-            submission.removed
-            or not submission.author
-            or not submission.is_robot_indexable
-        ):
-            return True
+        try:
+            if (
+                not submission.is_robot_indexable
+                or not submission.author
+            ):
+                return True
+        except NotFound:
+            self.logger.info(
+                "Praw Exception encountered",
+                praw_ex="NotFound",
+                id=post_id
+            )
+
         return False
 
     def retrieve_new_posts(
