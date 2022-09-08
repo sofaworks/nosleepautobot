@@ -57,10 +57,11 @@ class SubredditTool:
                 return True
         except NotFound:
             self.logger.info(
-                "Praw Exception encountered",
+                "Post not found.",
                 praw_ex="NotFound",
                 id=post_id
             )
+            return True
 
         return False
 
