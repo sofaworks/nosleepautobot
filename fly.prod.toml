@@ -13,7 +13,7 @@ processes = []
   AUTOBOT_ENFORCE_TIMELIMIT = "true"
   AUTOBOT_SUBREDDIT = "nosleep"
   AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220903 (by /u/SofaAssassin)"
-  DEVELOPMENT_MODE = "true"
+  DEVELOPMENT_MODE = "false"
 
 [experimental]
   allowed_public_ports = []
