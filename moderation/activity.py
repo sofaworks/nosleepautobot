@@ -7,11 +7,15 @@ from typing import ClassVar, Sequence
 
 import dataclasses
 import datetime
+import random
+import re
 import time
 
 from autobot.config import Settings
 
 from mako.lookup import TemplateLookup
+from praw.exceptions import RedditAPIException
+from praw.models import Redditor
 
 import praw
 import redis
@@ -35,6 +39,7 @@ class ReportService:
     exempt_mods: ClassVar[Sequence[str]] = ("nosleepautobot", "automoderator")
     actions: ClassVar[Sequence[str]] = ('approvelink', 'removelink', 'approvecomment', 'removecomment')
     individual_template: ClassVar[str] = "individual_mod_activity_report.md.template"
+    per_user_retries: ClassVar[int] = 10
 
     def __init__(
         self,
@@ -73,17 +78,58 @@ class ReportService:
         )
         return (month_start, today)
 
+    def _handle_rate_limit(self, ex: RedditAPIException) -> None:
+        units = {
+            "seconds": 1,
+            "minutes": 60,
+            "hours": 3600
+        }
+        m = re.search(
+                r"(?P<number>[0-9]+) (?P<unit>\w+)s? before trying.*\.$",
+                ex.message,
+                re.IGNORECASE
+            )
+        if not m:
+            self.log.error(
+                "Unable to parse rate limit message",
+                msg=ex.message
+            )
+            return
+
+        self.log.info("Rate limit found", limit=m)
+        delay = int(m["number"]) * units[m["unit"]]
+        # sleep with jitter - reddit has multiple rate limits in place
+        # for the API calls that surround report generation, so there
+        # may be subsequent rate limits after the first one
+        time.sleep(delay + random.randint(2, 100))
+
+    def summarize_and_send(self, moderator: Redditor, msg_title: str) -> None:
+        template = self.mako.get_template(self.individual_template)
+        for _ in range(self.per_user_retries):
+            try:
+                activity = self.generate_summary(moderator.name)
+                message = template.render(**dataclasses.asdict(activity))
+                moderator.message(subject=msg_title, message=message)
+                break
+            except RedditAPIException as e:
+                self.log.error("Received exception", ex=e)
+                rate_limited = False
+                for subex in e.items:
+                    if subex.error_type == "RATELIMIT":
+                        rate_limited = True
+                        self._handle_rate_limit(e)
+                if not rate_limited:
+                    break
+
     def gen_all_reports(self) -> None:
         self.log.info("ReportService preparing to generate all reports.")
-        template = self.mako.get_template(self.individual_template)
         for mod in self.moderators:
             if mod.name.lower() in self.exempt_mods:
                 continue
 
-            activity = self.generate_summary(mod.name)
-            mod.message(
-                f"r/{self.subreddit.display_name} moderation minimum activity reminder",
-                template.render(**dataclasses.asdict(activity))
+            self.summarize_and_send(
+                mod,
+                f"r/{self.subreddit.display_name} moderation minimum activity reminder"
             )
 
     def generate_summary(self, moderator: str) -> ModActivity:
@@ -106,7 +152,7 @@ class ReportService:
                     ds = datetime.datetime.fromtimestamp(
                             a.created_utc,
                             tz=datetime.timezone.utc)
-                    action_days.add(ds.toordinal)
+                    action_days.add(ds.toordinal())
         return ModActivity(
                 moderator=moderator,
                 begin=start,
@@ -117,7 +163,6 @@ class ReportService:
     def process_adhoc_requests(self) -> None:
         mark_queue = []
         reqs = defaultdict(list)
-        template = self.mako.get_template(self.individual_template)
         for msg in self.reddit.inbox.unread(limit=None):
             if (not msg.author
                     or msg.author.name.lower() not in self.moderators):
@@ -135,11 +180,13 @@ class ReportService:
 
         # process all of a moderator's requests as a single unit
         for mod, msgs in reqs.items():
-            self.log.info("Processing ad-hoc activity request", moderator=mod)
-            activity = self.generate_summary(mod.name)
-            mod.message(
-                subject=f"Your requested activity for /r/{self.subreddit.display_name}",
-                message=template.render(**dataclasses.asdict(activity))
+            self.log.info(
+                "Processing ad-hoc activity request",
+                moderator=mod.name
+            )
+            self.summarize_and_send(
+                mod,
+                f"Your requested activity for r/{self.subreddit.display_name}"
             )
             mark_queue.extend(msgs)
         self.reddit.inbox.mark_read(mark_queue)
@@ -154,8 +201,8 @@ class ReportService:
             self.log.info(
                 "Finished weekly activity report",
                 previous_run=last_run,
-                latest_run=now.timestamp())
-            self.redis.set(key, now.timestamp())
+                latest_run=int(now.timestamp()))
+            self.redis.set(key, int(now.timestamp()))
         else:
             self.log.info("Skipping running weekly report", last_run=last_run)
 
