@@ -2,6 +2,12 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2022-09-15
+
+## Fixed
+
+* [Issue 119](https://github.com/sofaworks/nosleepautobot/issues/119) - Added filtering for older posts from `/new`
+
 ## 2022-09-09
 
 ### Added

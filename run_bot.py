@@ -96,7 +96,9 @@ def transform_and_roll_out() -> None:
         "moderating_subreddit": settings.subreddit,
         "enforcing_timelimit": settings.enforce_timelimit,
         "timelimit": settings.post_timelimit,
-        "reddit_user": settings.reddit_username
+        "reddit_user": settings.reddit_username,
+        "ignoring_old_posts": settings.ignore_old_posts,
+        "ignoring_older_than": settings.ignore_older_than
     }
     log.info("Bot starting", **log_params)
     mb = MessageBuilder(td)

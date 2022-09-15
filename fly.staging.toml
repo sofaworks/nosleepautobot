@@ -9,10 +9,12 @@ processes = []
   dockerfile = "Dockerfile"
 
 [env]
+  AUTOBOT_IGNORE_OLD_POSTS = "true"
+  AUTOBOT_IGNORE_OLDER_THAN = "1800"
   AUTOBOT_POST_TIMELIMIT = "3600"
   AUTOBOT_ENFORCE_TIMELIMIT = "true"
   AUTOBOT_SUBREDDIT = "caneles"
-  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220903 (by /u/SofaAssassin)"
+  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220915 (by /u/SofaAssassin)"
   DEVELOPMENT_MODE = "false"
 
 [experimental]

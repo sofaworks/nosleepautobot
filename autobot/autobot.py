@@ -369,6 +369,14 @@ class AutoBot:
                             submission=s.id)
                 continue
 
+            # filter for issue 119
+            if self.cfg.ignore_old_posts:
+                now = int(time.time())
+                if (now - s.created_utc) > self.cfg.ignore_older_than:
+                    logger.info("Ignoring older /new post",
+                                submission=s.id)
+                    continue
+
             sub = Submission(
                 id=s.id,
                 author=s.author.name,

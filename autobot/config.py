@@ -5,6 +5,8 @@ from pydantic import BaseSettings, Field, RedisDsn
 
 class Settings(BaseSettings):
     development_mode: Annotated[bool, Field(env="development_mode")] = False
+    ignore_older_than: int = 43200
+    ignore_old_posts: bool = True
     post_timelimit: int = 86400
     enforce_timelimit: bool = True
     reddit_username: str

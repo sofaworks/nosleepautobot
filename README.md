@@ -107,7 +107,10 @@ Alternatively, the bot supports the following environment variables.
 | ------------ | ----------- | --------- |
 | `DEVELOPMENT_MODE` | Bot runs in dev mode and doesn't do 'live' things against reddit. | No (**default**: `False`) |
 | `AUTOBOT_USER_AGENT` | User agent string for the bot | Yes |
+| `AUTOBOT_IGNORE_OLDER_THAN` | Don't process posts older than this many seconds | No (**default**: `43200`) |
+| `AUTOBOT_IGNORE_OLD_POSTS` | Turn on old post filtering | No (**default**: `True`) |
 | `AUTOBOT_POST_TIMELIMIT` | Time limit between allowed posts in seconds | No (**default**: `86400`) |
+| `AUTOBOT_ENFORCE_TIMELIMIT` | Reject posts by timelimit? | No (**default**: `True`) |
 | `AUTOBOT_REDDIT_USERNAME` | Username the bot authenticates as | Yes |
 | `AUTOBOT_REDDIT_PASSWORD` | Password of specified user | Yes |
 | `AUTOBOT_CLIENT_ID` | Reddit API OAuth client ID for this application | Yes |
