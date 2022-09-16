@@ -1,5 +1,5 @@
 logtail-python==0.1.3
-Mako==1.2.1
+Mako==1.2.2
 msgpack==1.0.4
 praw==7.6.0
 pydantic==1.9.1
