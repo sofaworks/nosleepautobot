@@ -193,9 +193,9 @@ class ReportService:
 
     def run_weekly_report(self) -> None:
         key = f"reportservice.{self.subreddit.display_name}.weekly.last_run"
-        start, now = self.get_ts()
+        month_start, now = self.get_ts()
         last_run = self.redis.get(key)
-        if not last_run or int(last_run) < int(start.timestamp()):
+        if not last_run or int(last_run) < int(now.timestamp()):
             self.log.info("Running weekly job report", last_run=last_run)
             self.gen_all_reports()
             self.log.info(
