@@ -2,6 +2,12 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2022-09-16
+
+## Fixed
+
+* Correctly compare dates for weekly report
+
 ## 2022-09-15
 
 ## Fixed
