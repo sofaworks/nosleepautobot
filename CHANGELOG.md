@@ -2,6 +2,16 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2022-09-22
+
+### Changed
+
+* Upgrade `mako` from 1.2.1 to 1.2.2 (automatic via Github Dependabot)
+
+### Fixed
+
+* [Issue 123](https://github.com/sofaworks/nosleepautobot/issues/123) - Cache correct post ID for activity checking, fixed timelimit enforcement
+
 ## 2022-09-16
 
 ## Fixed
@@ -10,7 +20,7 @@ This is a changelog of important/interesting things that go into production rele
 
 ## 2022-09-15
 
-## Fixed
+### Fixed
 
 * [Issue 119](https://github.com/sofaworks/nosleepautobot/issues/119) - Added filtering for older posts from `/new`
 
