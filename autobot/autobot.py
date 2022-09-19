@@ -281,7 +281,7 @@ class AutoBot:
             activity = Activity(
                 author=submission.author.name,
                 subreddit=submission.subreddit.display_name,
-                last_post_id=submission.name,
+                last_post_id=submission.id,
                 last_post_time=submission.created_utc
             )
             ttl = tl - int(diff)
@@ -291,7 +291,7 @@ class AutoBot:
             logger.info("Not caching activity for post outside timelimit",
                         author=submission.author.name,
                         subreddit=submission.subreddit.display_name,
-                        id=submission.name)
+                        id=submission.id)
 
     def process_previous(self):
         # for all submissions, check to see if any of them should be rejected
