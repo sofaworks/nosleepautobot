@@ -7,8 +7,6 @@ import sys
 from autobot.config import Settings
 from moderation.activity import ReportService
 
-from logtail import LogtailHandler
-
 import structlog
 
 
@@ -45,11 +43,6 @@ if __name__ == '__main__':
     )
     log = structlog.get_logger()
     cfg = Settings()
-
-    if cfg.logtail_token:
-        root_log = logging.getLogger()
-        lth = LogtailHandler(source_token=cfg.logtail_token)
-        root_log.addHandler(lth)
 
     cd = Path(__file__).resolve().parent
     td = cd / "moderation" / "templates"

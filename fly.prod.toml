@@ -14,8 +14,9 @@ processes = []
   AUTOBOT_POST_TIMELIMIT = "86400"
   AUTOBOT_ENFORCE_TIMELIMIT = "true"
   AUTOBOT_SUBREDDIT = "nosleep"
-  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220919 (by /u/SofaAssassin)"
+  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20220920 (by /u/SofaAssassin)"
   DEVELOPMENT_MODE = "false"
+  ORG="sofaworks"
 
 [experimental]
   allowed_public_ports = []

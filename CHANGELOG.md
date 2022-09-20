@@ -2,7 +2,13 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
-## 2022-09-22
+## 2022-09-20
+
+### Changed
+
+* Use `vector` for shipping logs
+
+## 2022-09-19
 
 ### Changed
 

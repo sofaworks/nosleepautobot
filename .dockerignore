@@ -1,0 +1,11 @@
+*.env
+*.env.*
+**/*.pyc
+__pycache__
+.git/
+*.swp
+
+.mypy_cache/
+.venv/
+.circleci/
+.github/
