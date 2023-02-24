@@ -13,6 +13,7 @@ This is a changelog of important/interesting things that go into production rele
 * Upgrade `requests` from 2.28.1 to 2.28.2
 * Upgrade `redis` from 4.3.4 to 4.5.1
 * Upgrade `structlog` from 22.1.0 to 22.3.0
+* Upgrade `python-dotenv` from 0.20.0 to 1.0.0 (automatic via Github Dependabot)
 * Add more retries and longer process uptime health check for `supervisor`
 
 ### Fixed
