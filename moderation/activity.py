@@ -80,8 +80,11 @@ class ReportService:
 
     def _handle_rate_limit(self, ex: RedditAPIException) -> None:
         units = {
+            "second": 1,
             "seconds": 1,
+            "minute": 60,
             "minutes": 60,
+            "hour": 3600,
             "hours": 3600
         }
         m = re.search(

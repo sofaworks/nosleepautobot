@@ -44,6 +44,8 @@ if __name__ == '__main__':
     log = structlog.get_logger()
     cfg = Settings()
 
+    log.info("Report service starting")
+
     cd = Path(__file__).resolve().parent
     td = cd / "moderation" / "templates"
     svc = ReportService(cfg, td, log)

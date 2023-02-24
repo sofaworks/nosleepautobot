@@ -222,7 +222,7 @@ class ActionReporter(object):
             if moderator.name.lower() in ['nosleepautobot', 'automoderator']:
                 print("Skipping {}".format(moderator))
                 continue
-            
+
             table = self._generate_activity_header()
             table.append(self._get_user_report(moderator, start_ts))
 
@@ -240,12 +240,12 @@ Friendly reminder to meet your minimums for the month!
             '\n'.join(table))
 
             moderator.message('r/nosleep moderation minimum activity reminder', message)
-            
+
 
 
     def _generate_activity_reply(self, args):
         #self, users, start=None, end=None):
-       
+
         if args.start and not args.end:
             return 'You specified `--start` but not `--end`. You must specify both together if you want to use date ranges.\n\n{}'.format(USAGE_REPLY)
         if args.end and not args.start:
@@ -292,7 +292,7 @@ Friendly reminder to meet your minimums for the month!
                 continue
 
             if user.lower() in all_moderators:
-                reply_bits.append(self._get_user_report(user, start_ts, end_ts)) 
+                reply_bits.append(self._get_user_report(user, start_ts, end_ts))
             else:
                 invalid_users.append(user)
 
@@ -340,7 +340,7 @@ Friendly reminder to meet your minimums for the month!
             for removal in self._get_moderator_actions(m, 'removelink'):
                 ordinal = datetime.datetime.utcfromtimestamp(removal.created_utc).toordinal()
                 removals.setdefault(ordinal, 0)
-                removals[ordinal] += 1 
+                removals[ordinal] += 1
 
         # now merge the two
         for k, v in sorted(post_counts.items()):
@@ -369,7 +369,6 @@ Friendly reminder to meet your minimums for the month!
           '\n'.join(response))
 
         return full_reply
-        
 
     def _process_activity_requests(self, requests):
         for msg in requests:

@@ -2,6 +2,23 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2023-02-24
+
+### Changed
+
+* Upgrade Docker image from `python:3.10-slim-bullseye` to `python:3.11-slim-bullseye`
+* Upgrade `mako` from 1.2.2 to 1.2.4
+* Upgrade `praw` from 7.6.0 to 7.6.1
+* Upgrade `pydantic` from 1.9.1 to 1.10.5
+* Upgrade `requests` from 2.28.1 to 2.28.2
+* Upgrade `redis` from 4.3.4 to 4.5.1
+* Upgrade `structlog` from 22.1.0 to 22.3.0
+* Add more retries and longer process uptime health check for `supervisor`
+
+### Fixed
+
+* Propery handle rate limit messages that contain singular time units (e.g. `minute` instead of `minutes`)
+
 ## 2022-09-20
 
 ### Changed
