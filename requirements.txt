@@ -1,5 +1,5 @@
 Mako==1.2.4
-msgpack==1.0.4
+msgpack==1.0.5
 praw==7.7.1
 pydantic==1.10.5
 python-dotenv==1.0.0
