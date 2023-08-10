@@ -2,6 +2,22 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2023-08-10
+
+### Changed
+
+* Upgrade Docker image from `python:3.11-slim-bullseye` to `python:slim-bookworm`
+* Upgrade `msgpack` from 1.0.4 to 1.0.5
+* Upgrade `praw` from 7.6.1 to 7.7.1
+* Upgrade `pydantic` from 1.10.5 to 1.10.11
+* Upgrade `requests` from 2.28.2 to 2.31.0
+* Upgrade `redis` from 4.5.1 to 4.5.5
+* Upgrade `structlog` from 22.3.0 to 23.1.0
+
+## Fixed
+
+* Fix series flair code to support new subreddit flair names
+
 ## 2023-02-24
 
 ### Changed
@@ -18,7 +34,7 @@ This is a changelog of important/interesting things that go into production rele
 
 ### Fixed
 
-* Propery handle rate limit messages that contain singular time units (e.g. `minute` instead of `minutes`)
+* Properly handle rate limit messages that contain singular time units (e.g. `minute` instead of `minutes`)
 
 ## 2022-09-20
 
