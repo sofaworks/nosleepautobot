@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     client_secret: str
     subreddit: str
     user_agent: str
-    series_flair_name: str = "series"
+    series_flair_name: str = "flair - series"
     redis_url: Annotated[RedisDsn, Field(env="redis_url")]
 
     class Config:

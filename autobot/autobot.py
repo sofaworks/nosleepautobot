@@ -177,6 +177,7 @@ class AutoBot:
         self.reddit = SubredditTool(cfg)
         self.analyzer = PostAnalyzer(cfg.series_flair_name)
         self.cache_ttl = cfg.post_timelimit * 2
+        self.series_flair_name = cfg.series_flair_name
         self.latest_post = None
 
     def reject_by_timelimit(self, post: praw.models.Submission) -> bool:
@@ -413,7 +414,9 @@ class AutoBot:
 
                     if meta.is_serial():
                         # set the series flair for this post
-                        self.reddit.set_series_flair(s)
+                        self.reddit.set_series_flair(
+                            s, name=self.series_flair_name
+                        )
                         sub.series = True
 
                         # don't send PMs if this is final
