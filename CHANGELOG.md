@@ -2,6 +2,12 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2023-08-20
+
+### Fixed
+
+* Fix series check in the `PostAnalyzer` code
+
 ## 2023-08-10
 
 ### Changed
@@ -14,7 +20,7 @@ This is a changelog of important/interesting things that go into production rele
 * Upgrade `redis` from 4.5.1 to 4.5.5
 * Upgrade `structlog` from 22.3.0 to 23.1.0
 
-## Fixed
+### Fixed
 
 * Fix series flair code to support new subreddit flair names
 

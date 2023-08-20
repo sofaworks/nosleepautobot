@@ -149,7 +149,7 @@ class PostAnalyzer:
         series, final, bad_tags = self.categorize_tags(post.title)
         if not series:
             try:
-                series = post.link_flair_text.lower() == self.series_flair
+                series = post.link_flair_css_class.lower() == self.series_flair
             except AttributeError:
                 pass
         meta = PostMetadata(
@@ -333,7 +333,7 @@ class AutoBot:
             # series but then later flaired as one, send the message
             if not cached.series:
                 try:
-                    if p.link_flair_text.lower() == self.cfg.series_flair_name.lower():
+                    if p.link_flair_css_class.lower() == self.cfg.series_flair_name.lower():
                         logger.info(
                             "Post was flaired 'Series' after the fact. Posting message",
                             post_id=p.id
