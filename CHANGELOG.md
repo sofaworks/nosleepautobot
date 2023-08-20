@@ -4,6 +4,10 @@ This is a changelog of important/interesting things that go into production rele
 
 ## 2023-08-20
 
+### Changed
+
+* Upgrade `redis` from 4.5.5 to 4.6.0
+
 ### Fixed
 
 * Fix series check in the `PostAnalyzer` code
