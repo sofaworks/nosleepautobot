@@ -11,8 +11,7 @@
 
 | Branch | Status |
 |--------|--------|
-| `flymetothemoon` | [![CircleCI Prod branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/flymetothemoon.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/flymetothemoon) |
-| `master` | [![CircleCI Master branch build status](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master.svg?style=svg)](https://circleci.com/gh/sofaworks/nosleepautobot/tree/master) |
+| `master` |[![Build / Test](https://github.com/sofaworks/nosleepautobot/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/sofaworks/nosleepautobot/actions/workflows/ci.yml) | 
 
 ## What is nosleepautobot?
 

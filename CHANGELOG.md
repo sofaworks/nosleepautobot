@@ -2,6 +2,12 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2023-08-26
+
+### Changed
+
+* Switch from CircleCI to Github Actions for build/test
+
 ## 2023-08-20
 
 ### Changed

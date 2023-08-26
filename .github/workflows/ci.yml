@@ -1,4 +1,4 @@
-name: Fly Staging Deploy
+name: Bot Test
 on: push
 
 jobs:
