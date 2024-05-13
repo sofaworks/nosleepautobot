@@ -5,7 +5,7 @@ Hi there! [Your post](${post_url}) has been automatically [removed](https://www.
 
   The following invalid tags were found in your title: **${invalid_tags}**. 
   
-  **[Don't delete this post.](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/nosleep_indepth_modmail_removals_and_reposts/jfiggh0/)** Titles can't be edited on Reddit, so please [message the NoSleep moderators](${title_modmail}) ONCE with [the link](https://www.reddit.com/r/NoSleepAuthors/comments/13men0r/guide_to_getting_a_commentpost_link/) to this post and your proposed new title. _Please be patient_ and don't take any further action until the mods reply. This means **don't delete and/or repost.**
+  **[Don't delete this post.](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/nosleep_indepth_modmail_removals_and_reposts/jfiggh0/)** Titles can't be edited on Reddit, so please [message the NoSleep moderators](${reapproval_modmail}) ONCE with [the link](https://www.reddit.com/r/NoSleepAuthors/comments/13men0r/guide_to_getting_a_commentpost_link/) to this post and your proposed new title. _Please be patient_ and don't take any further action until the mods reply. This means **don't delete and/or repost.**
 % endif
 
 % if has_nsfw_title is True:
