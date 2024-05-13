@@ -242,21 +242,23 @@ class AutoBot:
     ) -> str:
 
         modmail_link = self.reddit.create_modmail_link()
+
+        if post_meta.invalid_tags:
+            reapproval_msg = self.msg_build.create_title_approval_msg(post.shortlink)
+        else:
+            reapproval_msg = self.msg_bld.create_approval_msg(post.shortlink)
+
         reapproval_link = self.reddit.create_modmail_link(
                 "Please reapprove submission",
-                self.msg_bld.create_approval_msg(post.shortlink)
+                reapproval_msg
         )
 
-        perm_del = False
-
-        if post_meta.invalid_tags or post_meta.has_nsfw_title:
-            perm_del = True
+        if post_meta.invalid_tags
 
         return self.msg_bld.create_deleted_post_msg(
             post.shortlink,
             modmail_link=modmail_link,
             reapproval_modmail=reapproval_link,
-            permanent=perm_del,
             has_nsfw_title=post_meta.has_nsfw_title,
             has_codeblocks=post_meta.has_codeblocks,
             long_paragraphs=post_meta.has_long_paragraphs,
