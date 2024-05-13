@@ -5,7 +5,7 @@ from mako.lookup import TemplateLookup
 
 class MessageBuilder:
     TEMPLATES = {
-        "repproval": "reapproval.template",
+        "reapproval": "reapproval.template",
         "series-pm": "series_message.md.template",
         "series-comment": "series_comment.md.template",
         "post-a-day": "post_a_day.md.template",
@@ -20,18 +20,24 @@ class MessageBuilder:
         return t.render(**kwargs)
 
     def create_approval_msg(self, post_url: str) -> str:
-        return self._render("repproval", post_url=post_url)
+        return self._render("reapproval", post_url=post_url)
 
     def create_title_approval_msg(self, post_url: str) -> str:
-        return self._render("repproval", post_url=post_url, is_title_repproval=True)
+        return self._render(
+            "reapproval",
+            post_url=post_url,
+            is_title_reapproval=True
+        )
 
     def create_post_a_day_msg(
         self,
+        post_url: str,
         remaining: str,
         modmail_link: str
     ) -> str:
         return self._render(
             "post-a-day",
+            post_url=post_url,
             time_remaining=remaining,
             modmail_link=modmail_link
         )

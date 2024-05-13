@@ -1,10 +1,10 @@
 Hi there! [Your post](${post_url}) has been automatically [removed](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/comment/jfigj88/) from /r/nosleep for the following reason(s):
 
 % if invalid_tags:
-* **[Title Contains Invalid Tags](https://www.reddit.com/r/NoSleepAuthors/comments/zav2k9/comment/iynq9g1)/**
+* **[Title Contains Invalid Tags](https://www.reddit.com/r/NoSleepAuthors/comments/zav2k9/comment/iynq9g1)**
 
-  The following invalid tags were found in your title: **${invalid_tags}**. 
-  
+  The following invalid tags were found in your title: **${invalid_tags}**.
+
   **[Don't delete this post.](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/nosleep_indepth_modmail_removals_and_reposts/jfiggh0/)** Titles can't be edited on Reddit, so please [message the NoSleep moderators](${reapproval_modmail}) ONCE with [the link](https://www.reddit.com/r/NoSleepAuthors/comments/13men0r/guide_to_getting_a_commentpost_link/) to this post and your proposed new title. _Please be patient_ and don't take any further action until the mods reply. This means **don't delete and/or repost.**
 % endif
 
@@ -16,22 +16,20 @@ Hi there! [Your post](${post_url}) has been automatically [removed](https://www.
   Titles can't be edited on Reddit, so you may repost this story **one time only** with a corrected title, but it will still be reviewed by human moderators and may be removed again if it breaks [other NoSleep rules](https://www.reddit.com/r/nosleep/wiki/index/).
 % endif
 
-  % if long_paragraphs:
+% if long_paragraphs:
 * **[Long Paragraphs (Over 350 Words)](https://www.reddit.com/r/NoSleepAuthors/comments/zav2k9/comment/iynqcom/)**
 
   You have one or more paragraphs containing more than 350 words. Please break up your story into smaller paragraphs. You can create paragraphs by pressing `Enter` twice at the end of a line.
 
   **[Don't delete this post.](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/nosleep_indepth_modmail_removals_and_reposts/jfiggh0/)** You may [edit it](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/comment/jfigt8d/), then [message the NoSleep moderators](${reapproval_modmail}) ONCE to ask for a review. Be sure to include [the link](https://www.reddit.com/r/NoSleepAuthors/comments/13men0r/guide_to_getting_a_commentpost_link/) to this post. _Please be patient_ and don't take any further action until the mods reply. This means **don't delete and/or repost.**
-  % endif
+% endif
 
-  % if has_codeblocks:
+% if has_codeblocks:
 * **[Indents/Spaces at the Start of Paragraphs](https://www.reddit.com/r/NoSleepAuthors/comments/zav2k9/comment/iynqcom/)**
 
   You have one or more paragraphs beginning with a tab or four or more spaces. On Reddit, lines beginning with a tab or four or more spaces are treated as blocks of code and can make your story unreadable. Please remove tabs or spaces at the beginning of paragraphs/lines. You can create paragraphs by pressing `Enter` twice at the end of a line.
 
   **[Don't delete this post.](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/nosleep_indepth_modmail_removals_and_reposts/jfiggh0/)** You may [edit it](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/comment/jfigt8d/) to remove the indents, then [message the NoSleep moderators](${reapproval_modmail}) ONCE to ask for a review. Be sure to include [the link](https://www.reddit.com/r/NoSleepAuthors/comments/13men0r/guide_to_getting_a_commentpost_link/) to this post. _Please be patient_ and don't take any further action until the mods reply. This means **don't delete and/or repost.**
-
-  % endif
 % endif
 
 **See also:** [NoSleep Posting Guidelines](http://www.reddit.com/r/nosleep/wiki/index) | [NoSleepAuthors](https://www.reddit.com/r/NoSleepAuthors/comments/z0qnxx/introduction_to_nosleepauthors/) | [Similar Subreddits](https://www.reddit.com/r/nosleep/wiki/similarsubreddits) | [Author FAQ](https://www.reddit.com/r/NoSleepAuthors/comments/13hku3x/nosleep_faq_authors/) | [Beginner's Guide to Reddit](https://www.reddit.com/r/NoSleepAuthors/comments/10lw4z9/a_beginners_guide_to_reddit/) | [If you use the Reddit app](https://www.reddit.com/r/NoSleepOOC/comments/x2t7ur/reddit_app_users_please_read/)

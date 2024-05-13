@@ -217,6 +217,7 @@ class AutoBot:
                 }
                 logger.info("Rejecting post and notifying author", **log_params)
                 msg = self.msg_bld.create_post_a_day_msg(
+                    post.shortlink,
                     human_fmt,
                     self.reddit.create_modmail_link()
                 )
@@ -244,7 +245,7 @@ class AutoBot:
         modmail_link = self.reddit.create_modmail_link()
 
         if post_meta.invalid_tags:
-            reapproval_msg = self.msg_build.create_title_approval_msg(post.shortlink)
+            reapproval_msg = self.msg_bld.create_title_approval_msg(post.shortlink)
         else:
             reapproval_msg = self.msg_bld.create_approval_msg(post.shortlink)
 
