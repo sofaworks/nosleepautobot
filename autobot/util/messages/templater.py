@@ -22,6 +22,9 @@ class MessageBuilder:
     def create_approval_msg(self, post_url: str) -> str:
         return self._render("repproval", post_url=post_url)
 
+    def create_title_approval_msg(self, post_url: str) -> str:
+        return self._render("repproval", post_url=post_url, is_title_repproval=True)
+
     def create_post_a_day_msg(
         self,
         remaining: str,
