@@ -1,8 +1,8 @@
 FROM python:slim-bookworm
 
 RUN apt-get update && apt-get install -y curl
-RUN curl -1sLf 'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' | bash
-RUN apt-get update && apt-get -y upgrade && apt-get install -y vector
+RUN bash -c "$(curl -1sLf 'https://setup.vector.dev')"
+RUN apt-get update && apt-get -y upgrade && apt-get install -y vector && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /zeus
 WORKDIR /zeus
