@@ -1,8 +1,8 @@
 <%doc>Message sent to users whose post violates the 24-hour rule.</%doc>
-Hi there! /r/nosleep limits posts to one post per author per day, in order to give all submitters here an equal shot at the front page.
+Hello there! [Your post](${post_url}) has been automatically [removed](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/comment/jfigj88/) as r/nosleep limits users to **[one (1) post per 24-hour period](https://www.reddit.com/r/NoSleepAuthors/comments/zebijs/nosleep_indepth_24_hour1_post_per_day_rule/).**
 
-As such, your post has been removed. Feel free to repost your story in **${time_remaining}**.
+You may repost it **one time only** in **${time_remaining}**, but your story will still be reviewed by human moderators and may be removed again if it breaks [other NoSleep rules](https://www.reddit.com/r/nosleep/wiki/index/).
 
-Confused? See the [mod announcement](http://www.reddit.com/r/NoSleepOOC/comments/1m1spe/rule_addition_one_days_spacing_between_nosleep/) on the subject for more information. If you believe your post was removed in error, please [message the moderators](${modmail_link}).
+**See also:** [NoSleep Posting Guidelines](http://www.reddit.com/r/nosleep/wiki/index) | [NoSleepAuthors](https://www.reddit.com/r/NoSleepAuthors/comments/z0qnxx/introduction_to_nosleepauthors/) | [Similar Subreddits](https://www.reddit.com/r/nosleep/wiki/similarsubreddits) | [Author FAQ](https://www.reddit.com/r/NoSleepAuthors/comments/13hku3x/nosleep_faq_authors/) | [Beginner's Guide to Reddit](https://www.reddit.com/r/NoSleepAuthors/comments/10lw4z9/a_beginners_guide_to_reddit/) | [If you use the Reddit app](https://www.reddit.com/r/NoSleepOOC/comments/x2t7ur/reddit_app_users_please_read/)
 
 _I am a bot, and this was automatically posted. Do not reply to me as messages will be ignored. Please [contact the moderators of this subreddit](${modmail_link}) if you have any questions, concerns, or bugs to report._
