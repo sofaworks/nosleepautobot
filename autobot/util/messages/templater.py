@@ -27,11 +27,13 @@ class MessageBuilder:
 
     def create_post_a_day_msg(
         self,
+        post_url: str,
         remaining: str,
         modmail_link: str
     ) -> str:
         return self._render(
             "post-a-day",
+            post_url=post_url,
             time_remaining=remaining,
             modmail_link=modmail_link
         )

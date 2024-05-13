@@ -217,6 +217,7 @@ class AutoBot:
                 }
                 logger.info("Rejecting post and notifying author", **log_params)
                 msg = self.msg_bld.create_post_a_day_msg(
+                    post.shortlink,
                     human_fmt,
                     self.reddit.create_modmail_link()
                 )
