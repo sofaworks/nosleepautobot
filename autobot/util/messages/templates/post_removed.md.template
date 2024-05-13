@@ -1,7 +1,7 @@
 Hi there! [Your post](${post_url}) has been automatically [removed](https://www.reddit.com/r/NoSleepAuthors/comments/z93asr/comment/jfigj88/) from /r/nosleep for the following reason(s):
 
 % if invalid_tags:
-* **[Title Contains Invalid Tags](https://www.reddit.com/r/NoSleepAuthors/comments/zav2k9/comment/iynq9g1)/**
+* **[Title Contains Invalid Tags](https://www.reddit.com/r/NoSleepAuthors/comments/zav2k9/comment/iynq9g1)**
 
   The following invalid tags were found in your title: **${invalid_tags}**.
 

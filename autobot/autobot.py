@@ -245,7 +245,7 @@ class AutoBot:
         modmail_link = self.reddit.create_modmail_link()
 
         if post_meta.invalid_tags:
-            reapproval_msg = self.msg_build.create_title_approval_msg(post.shortlink)
+            reapproval_msg = self.msg_bld.create_title_approval_msg(post.shortlink)
         else:
             reapproval_msg = self.msg_bld.create_approval_msg(post.shortlink)
 
