@@ -253,8 +253,6 @@ class AutoBot:
                 reapproval_msg
         )
 
-        if post_meta.invalid_tags
-
         return self.msg_bld.create_deleted_post_msg(
             post.shortlink,
             modmail_link=modmail_link,
