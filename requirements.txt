@@ -3,7 +3,7 @@ msgpack==1.0.5
 praw==7.7.1
 pydantic==1.10.11
 python-dotenv==1.0.0
-requests==2.31.0
+requests==2.32.2
 redis==4.6.0
 schedule==1.2.0
 structlog==23.2.0
