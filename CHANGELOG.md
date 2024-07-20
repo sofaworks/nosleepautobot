@@ -2,6 +2,18 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2024-07-20
+
+### Changed
+
+* Upgrade `msgpack` from 1.0.5 to 1.0.8
+* Upgrade `pydantic` from 1.10.11 to 2.8.2
+* Add `pydantic-settings` as dependency (due to move to `pydantic-2.x`)
+* Upgrade `requests` from 2.31.0 to 2.32.3
+* Upgrade `redis` from 4.6.0 to 5.0.7
+* Upgrade `schedule` from 1.2.0 to 1.2.2
+
+
 ## 2023-08-26
 
 ### Changed
