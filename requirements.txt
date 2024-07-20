@@ -1,7 +1,7 @@
 Mako==1.2.4
 msgpack==1.0.8
 praw==7.7.1
-pydantic==1.10.11
+pydantic==2.8.2
 python-dotenv==1.0.0
 requests==2.32.3
 redis==5.0.7
