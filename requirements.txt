@@ -4,6 +4,6 @@ praw==7.7.1
 pydantic==1.10.11
 python-dotenv==1.0.0
 requests==2.32.3
-redis==4.6.0
+redis==5.0.7
 schedule==1.2.2
 structlog==23.2.0
