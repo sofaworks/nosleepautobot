@@ -209,7 +209,7 @@ class TestBotMethods(TestCase):
         mock_sr.display_name = "nosleep"
 
         reddit_mock.return_value.subreddit = lambda _: mock_sr
-        settings = Settings.construct()
+        settings = Settings.model_construct()
         settings.development_mode = True
         settings.user_agent = "hello"
         settings.client_id = "123"
@@ -236,7 +236,7 @@ class TestBotMethods(TestCase):
         mock_sr.display_name = "nosleep"
 
         reddit_mock.return_value.subreddit = lambda _: mock_sr
-        settings = Settings.construct()
+        settings = Settings.model_construct()
         settings.development_mode = True
         settings.user_agent = "hello"
         settings.client_id = "123"

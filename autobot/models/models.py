@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Generic, Generator, Iterable, Optional, Type, TypeVar
 import json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 import redis
 
 
@@ -15,10 +15,9 @@ class Submission(BaseModel):
     sent_series_pm: bool = False
     deleted: bool = False
 
-    class Config:
-        json_encoders = {
-            datetime: lambda _: int(_.timestamp())
-        }
+    @field_serializer('submitted')
+    def serialize_submitted(self, submitted: datetime, _info):
+        return int(submitted.timestamp())
 
 
 class Activity(BaseModel):
@@ -29,10 +28,9 @@ class Activity(BaseModel):
     last_post_id: str
     last_post_time: datetime
 
-    class Config:
-        json_encoders = {
-            datetime: lambda _: int(_.timestamp())
-        }
+    @field_serializer('last_post_time')
+    def serialize_last_post_time(self, last_post_time: datetime, _info):
+        return int(last_post_time.timestamp())
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -41,6 +39,7 @@ T = TypeVar("T", bound=BaseModel)
 class DataStore(Generic[T]):
     """This generic class handles the persistence/caching of relevant data
     bits like metadata about posts, info about when users last submitted..."""
+
     def __init__(self, rd: redis.Redis, factory: Type[T]) -> None:
         self.rd = rd
         self.tf = factory
