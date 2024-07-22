@@ -7,4 +7,4 @@ python-dotenv==1.0.0
 requests==2.32.3
 redis==5.0.7
 schedule==1.2.2
-structlog==23.2.0
+structlog==24.4.0
