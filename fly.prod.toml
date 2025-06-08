@@ -18,10 +18,14 @@ processes = []
   AUTOBOT_POST_TIMELIMIT = "86400"
   AUTOBOT_ENFORCE_TIMELIMIT = "true"
   AUTOBOT_SUBREDDIT = "nosleep"
-  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20240512 (by /u/SofaAssassin)"
+  AUTOBOT_USER_AGENT = "/r/nosleep AutoBot v20250609 (by /u/SofaAssassin)"
   DEVELOPMENT_MODE = "false"
   ORG="sofaworks"
 
 [experimental]
   allowed_public_ports = []
   auto_rollback = true
+
+[metrics]
+  port = 9091
+  path = "/metrics"
