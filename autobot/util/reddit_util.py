@@ -186,7 +186,16 @@ class SubredditTool:
                 distinguish=distinguish,
                 lock=lock
             )
-            rsp = post.reply(msg)
+
+            try:
+                rsp = post.reply(msg)
+            except Exception:
+                self.logger.exception(
+                    "Exception occurred when adding comment to post",
+                    post_id=post.id,
+                    author=post.author.name,
+                )
+
             dis = "yes" if distinguish else "no"
             rsp.mod.distinguish(how=dis, sticky=sticky)
             if lock:

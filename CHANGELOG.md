@@ -2,6 +2,12 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2025-06-09
+
+### Fixed
+
+* Handles exceptions in `reddit_util.add_comment`
+
 ## 2024-07-20
 
 ### Changed
