@@ -4,6 +4,10 @@ This is a changelog of important/interesting things that go into production rele
 
 ## 2025-06-09
 
+### Changed
+
+* Remove `vector`
+
 ### Fixed
 
 * Handles exceptions in `reddit_util.add_comment`
