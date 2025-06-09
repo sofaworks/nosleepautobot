@@ -23,7 +23,7 @@ def configure_structlog() -> None:
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
-        structlog.processors.UnicodeDecoder()
+        structlog.processors.UnicodeDecoder(),
     ]
 
     if sys.stderr.isatty():
@@ -45,7 +45,7 @@ def create_argparser() -> argparse.ArgumentParser:
         "--forever",
         required=False,
         action="store_true",
-        help="If specified, runs bot forever."
+        help="If specified, runs bot forever.",
     )
     parser.add_argument(
         "-i",
@@ -53,7 +53,7 @@ def create_argparser() -> argparse.ArgumentParser:
         required=False,
         type=int,
         default=30,
-        help="Seconds to wait between run cycles, if 'forever' is specified."
+        help="Seconds to wait between run cycles, if 'forever' is specified.",
     )
     return parser
 
@@ -80,7 +80,7 @@ def transform_and_roll_out() -> None:
     parser = create_argparser()
     args = parser.parse_args()
 
-    rd = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    rd = redis.Redis.from_url(str(settings.redis_url), decode_responses=True)
     cd = Path(__file__).resolve().parent
     td = cd / "autobot" / "util" / "messages" / "templates"
     log_params = {
@@ -91,7 +91,7 @@ def transform_and_roll_out() -> None:
         "timelimit": settings.post_timelimit,
         "reddit_user": settings.reddit_username,
         "ignoring_old_posts": settings.ignore_old_posts,
-        "ignoring_older_than": settings.ignore_older_than
+        "ignoring_older_than": settings.ignore_older_than,
     }
     log.info("Bot starting", **log_params)
     mb = MessageBuilder(td)
