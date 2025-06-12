@@ -11,11 +11,15 @@ from autobot.models import Activity, DataStore, Submission
 from autobot.util.messages.templater import MessageBuilder
 from autobot.util.reddit_util import SubredditTool
 
+from prometheus_client import Counter
 import praw
 import redis
 import structlog
 
 
+run_counter = Counter("scans", "Number of times bot has scanned for posts")
+post_counter = Counter("posts_processed", "Number of posts processed")
+delete_counter = Counter("posts_deleted", "Number of posts deleted")
 logger = structlog.get_logger()
 
 
@@ -33,6 +37,7 @@ def englishify_time(seconds: float) -> str:
 class PostMetadata:
     """Data class for various properties we derive
     from a post."""
+
     has_long_paragraphs: bool = False
     has_codeblocks: bool = False
     has_nsfw_title: bool = False
@@ -45,7 +50,7 @@ class PostMetadata:
             self.has_long_paragraphs,
             self.has_codeblocks,
             self.has_nsfw_title,
-            self.invalid_tags
+            self.invalid_tags,
         )
         return any(bad_things)
 
@@ -97,26 +102,23 @@ class PostAnalyzer:
             "update": rf"update(?:[ ]#?{num_text_pattern}?)?",
         }
 
-        captures = re.findall(
-            r"(\[[^]]*\]|\(.*?\)|\{.*?\}|\|.*?\|)",
-            title
-        )
+        captures = re.findall(r"(\[[^]]*\]|\(.*?\)|\{.*?\}|\|.*?\|)", title)
 
         for c in captures:
             if re.search(final_pattern, c, re.IGNORECASE):
                 is_series = True
                 is_final = True
-            elif any(re.fullmatch(p, c[1:-1].strip(), re.IGNORECASE)
-                     for p in series_patterns.values()):
+            elif any(
+                re.fullmatch(p, c[1:-1].strip(), re.IGNORECASE)
+                for p in series_patterns.values()
+            ):
                 is_series = True
             else:
                 invalid_tags.append(c)
         return is_series, is_final, invalid_tags
 
     def contains_long_paragraphs(
-        self,
-        paragraphs: Iterable[str],
-        max_word_count: int = 350
+        self, paragraphs: Iterable[str], max_word_count: int = 350
     ) -> bool:
         for p in paragraphs:
             if max_word_count < len(re.findall(r"\w+", p)):
@@ -140,7 +142,7 @@ class PostAnalyzer:
             # means this is just a blank line
             if not p.strip():
                 continue
-            if p.startswith(" "*4) or p.lstrip(" ").startswith("\t"):
+            if p.startswith(" " * 4) or p.lstrip(" ").startswith("\t"):
                 return True
         return False
 
@@ -158,17 +160,14 @@ class PostAnalyzer:
             has_nsfw_title=self.contains_nsfw_title(post.title),
             is_series=series,
             is_final=final,
-            invalid_tags=bad_tags
+            invalid_tags=bad_tags,
         )
         return meta
 
 
 class AutoBot:
     def __init__(
-        self,
-        cfg: Settings,
-        db: redis.Redis,
-        msg_builder: MessageBuilder
+        self, cfg: Settings, db: redis.Redis, msg_builder: MessageBuilder
     ):
         self.cfg = cfg
         self.post_db = DataStore(db, Submission)
@@ -215,13 +214,16 @@ class AutoBot:
                     "old_post_timestamp": act.last_post_time.timestamp(),
                     "can_post_in": allowed_when,
                 }
-                logger.info("Rejecting post and notifying author", **log_params)
+                logger.info(
+                    "Rejecting post and notifying author", **log_params
+                )
                 msg = self.msg_bld.create_post_a_day_msg(
                     post.shortlink,
                     human_fmt,
-                    self.reddit.create_modmail_link()
+                    self.reddit.create_modmail_link(),
                 )
                 self.reddit.add_comment(post, msg, distinguish=True)
+                delete_counter.inc()
                 self.reddit.delete_post(post)
 
         return rejected
@@ -230,28 +232,29 @@ class AutoBot:
         q = {
             "to": "UpdateMeBot",
             "subject": "Subscribe",
-            "message": ("SubscribeMe! "
-                        f"/r/{self.reddit.subreddit_name()} /u/{post.author}")
+            "message": (
+                "SubscribeMe! "
+                f"/r/{self.reddit.subreddit_name()} /u/{post.author}"
+            ),
         }
         sub_url = self.reddit.gen_compose_url(q)
         return self.msg_bld.create_series_comment(sub_url)
 
     def prepare_delete_message(
-        self,
-        post: praw.models.Submission,
-        post_meta: PostMetadata
+        self, post: praw.models.Submission, post_meta: PostMetadata
     ) -> str:
 
         modmail_link = self.reddit.create_modmail_link()
 
         if post_meta.invalid_tags:
-            reapproval_msg = self.msg_bld.create_title_approval_msg(post.shortlink)
+            reapproval_msg = self.msg_bld.create_title_approval_msg(
+                post.shortlink
+            )
         else:
             reapproval_msg = self.msg_bld.create_approval_msg(post.shortlink)
 
         reapproval_link = self.reddit.create_modmail_link(
-                "Please reapprove submission",
-                reapproval_msg
+            "Please reapprove submission", reapproval_msg
         )
 
         return self.msg_bld.create_deleted_post_msg(
@@ -261,7 +264,7 @@ class AutoBot:
             has_nsfw_title=post_meta.has_nsfw_title,
             has_codeblocks=post_meta.has_codeblocks,
             long_paragraphs=post_meta.has_long_paragraphs,
-            invalid_tags=post_meta.bad_tags()
+            invalid_tags=post_meta.bad_tags(),
         )
 
     def post_series_reminder(self, submission: praw.models.Submission) -> None:
@@ -284,16 +287,18 @@ class AutoBot:
                 author=submission.author.name,
                 subreddit=submission.subreddit.display_name,
                 last_post_id=submission.id,
-                last_post_time=submission.created_utc
+                last_post_time=submission.created_utc,
             )
             ttl = tl - int(diff)
             logger.info("Caching activity", info=activity, ttl=ttl)
             self.activity_db.persist(activity.author, activity, ttl=ttl)
         else:
-            logger.info("Not caching activity for post outside timelimit",
-                        author=submission.author.name,
-                        subreddit=submission.subreddit.display_name,
-                        id=submission.id)
+            logger.info(
+                "Not caching activity for post outside timelimit",
+                author=submission.author.name,
+                subreddit=submission.subreddit.display_name,
+                id=submission.id,
+            )
 
     def process_previous(self):
         # for all submissions, check to see if any of them should be rejected
@@ -302,14 +307,13 @@ class AutoBot:
         # As each submission is processed, check it against a user's new posts
         # in descending posted order
         posts = sorted(
-            self.reddit.search_recent_posts(),
-            key=attrgetter("created_utc")
+            self.reddit.search_recent_posts(), key=attrgetter("created_utc")
         )
 
         logger.info(
             "Processing previous posts from last hour",
             subreddit=self.reddit.subreddit_name(),
-            posts_found=len(posts)
+            posts_found=len(posts),
         )
 
         cached_res = self.post_db.get_many([p.id for p in posts])
@@ -327,17 +331,20 @@ class AutoBot:
             logger.debug(
                 "Processing previously seen submission",
                 post_id=p.id,
-                author=p.author.name
+                author=p.author.name,
             )
             # Do processing on previous submissions to see if we need to
             # add the series message if we saw this before and it's not a
             # series but then later flaired as one, send the message
             if not cached.series:
                 try:
-                    if p.link_flair_css_class.lower() == self.cfg.series_flair_name.lower():
+                    if (
+                        p.link_flair_css_class.lower()
+                        == self.cfg.series_flair_name.lower()
+                    ):
                         logger.info(
                             "Post was flaired 'Series' after the fact. Posting message",
-                            post_id=p.id
+                            post_id=p.id,
                         )
 
                         self.post_series_reminder(p)
@@ -356,7 +363,7 @@ class AutoBot:
         delay due to indexing."""
         listing = sorted(
             self.reddit.retrieve_new_posts(before=self.latest_post),
-            key=attrgetter("created_utc")
+            key=attrgetter("created_utc"),
         )
         cached_res = self.post_db.get_many([s.id for s in listing])
         for s, cached in zip(listing, cached_res):
@@ -366,23 +373,22 @@ class AutoBot:
 
             # prevention for issue 102
             if s.subreddit.display_name != self.reddit.subreddit_name():
-                logger.warn("Found post from other subreddit!",
-                            subreddit=s.subreddit.display_name,
-                            submission=s.id)
+                logger.warn(
+                    "Found post from other subreddit!",
+                    subreddit=s.subreddit.display_name,
+                    submission=s.id,
+                )
                 continue
 
             # filter for issue 119
             if self.cfg.ignore_old_posts:
                 now = int(time.time())
                 if (now - s.created_utc) > self.cfg.ignore_older_than:
-                    logger.info("Ignoring older /new post",
-                                submission=s.id)
+                    logger.info("Ignoring older /new post", submission=s.id)
                     continue
 
             sub = Submission(
-                id=s.id,
-                author=s.author.name,
-                submitted=s.created_utc
+                id=s.id, author=s.author.name, submitted=s.created_utc
             )
             extra_log: dict[str, Any] = {}
 
@@ -401,10 +407,7 @@ class AutoBot:
                     # We have bad (tags|title) - Delete post and send PM.
                     msg = self.prepare_delete_message(s, meta)
                     self.reddit.add_comment(
-                        s,
-                        msg,
-                        distinguish=True,
-                        sticky=True
+                        s, msg, distinguish=True, sticky=True
                     )
                     self.reddit.delete_post(s)
                     sub.deleted = True
@@ -435,8 +438,9 @@ class AutoBot:
             logger.info(
                 "Processed post",
                 submission=json.loads(sub.json()),
-                **extra_log
+                **extra_log,
             )
+            post_counter.inc()
             self.post_db.persist(sub.id, sub, ttl=self.cache_ttl)
 
     def run(self, forever: bool = False, interval: int = 15):
@@ -444,6 +448,7 @@ class AutoBot:
         at `interval` seconds per run."""
         bot_start_time = time.time()
         while True:
+            run_counter.inc()
             self.fetch_new()
             self.process_previous()
 
@@ -454,7 +459,6 @@ class AutoBot:
             sleep_interval = interval - int(run_interval)
 
             logger.info(
-                "Sleeping until next run.",
-                sleep_seconds=sleep_interval
+                "Sleeping until next run.", sleep_seconds=sleep_interval
             )
             time.sleep(sleep_interval)
