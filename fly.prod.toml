@@ -28,4 +28,4 @@ processes = []
 
 [metrics]
   port = 9091
-  path = "/metrics"
+  path = "/"

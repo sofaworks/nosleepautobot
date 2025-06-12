@@ -11,6 +11,7 @@ from autobot.autobot import AutoBot
 from autobot.config import Settings
 from autobot.util.messages.templater import MessageBuilder
 
+from prometheus_client import start_http_server
 import redis
 import structlog
 
@@ -95,6 +96,8 @@ def transform_and_roll_out() -> None:
     }
     log.info("Bot starting", **log_params)
     mb = MessageBuilder(td)
+
+    start_http_server(9091)
     AutoBot(settings, rd, mb).run(args.forever, args.interval)
 
 
