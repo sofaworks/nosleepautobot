@@ -2,6 +2,12 @@
 
 This is a changelog of important/interesting things that go into production releases.
 
+## 2025-06-12
+
+## Added
+
+* Add `prometheus-client` and publish total runs/deletes/processed metrics
+
 ## 2025-06-09
 
 ### Changed
