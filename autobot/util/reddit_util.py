@@ -13,6 +13,7 @@ PrawSubmissionIter = Iterator[praw.models.Submission]
 
 class MissingFlairException(Exception):
     """Custom exception class when a flair doesn't exist."""
+
     ...
 
 
@@ -25,13 +26,13 @@ class SubredditTool:
             client_id=cfg.client_id,
             client_secret=cfg.client_secret,
             username=cfg.reddit_username,
-            password=cfg.reddit_password
+            password=cfg.reddit_password,
         )
         self.subreddit = self.reddit.subreddit(cfg.subreddit)
         if not self.read_only and not self.subreddit.user_is_moderator:
             raise AssertionError(
-                    f"User {cfg.reddit_username} is not moderator of "
-                    f"subreddit {self.subreddit.display_name}."
+                f"User {cfg.reddit_username} is not moderator of "
+                f"subreddit {self.subreddit.display_name}."
             )
 
     def _get_posts(
@@ -40,7 +41,7 @@ class SubredditTool:
         time_filter: str,
         *,
         syntax: str = "lucene",
-        sort: str = "new"
+        sort: str = "new",
     ) -> PrawSubmissionIter:
         r = self.subreddit.search(
             query, time_filter=time_filter, syntax=syntax, sort=sort
@@ -50,17 +51,10 @@ class SubredditTool:
     def is_post_deleted(self, post_id: str) -> bool:
         submission = self.reddit.submission(post_id)
         try:
-            if (
-                not submission.is_robot_indexable
-                or not submission.author
-            ):
+            if not submission.is_robot_indexable or not submission.author:
                 return True
         except NotFound:
-            self.logger.info(
-                "Post not found.",
-                praw_ex="NotFound",
-                id=post_id
-            )
+            self.logger.info("Post not found.", praw_ex="NotFound", id=post_id)
             return True
 
         return False
@@ -82,7 +76,8 @@ class SubredditTool:
                 self.logger.info(
                     "Post was removed, not using 'before' parameter",
                     subreddit=before.subreddit.display_name,
-                    id=before.id)
+                    id=before.id,
+                )
                 before = None
         params = {"before": before.name} if before else {}
         return self.subreddit.new(params=params)
@@ -97,8 +92,7 @@ class SubredditTool:
         )
 
     def get_redditor_posts(
-        self,
-        redditor: praw.models.Redditor
+        self, redditor: praw.models.Redditor
     ) -> PrawSubmissionIter:
         """Retrieve the data from the API of all the posts made by this author
         in the last 24 hours. This has to be done via cloudsearch because
@@ -106,55 +100,38 @@ class SubredditTool:
         indexes, so user names with hyphens in them will return improper
         results."""
         return self._get_posts(
-            f'author:"{redditor.name}"',
-            time_filter="day",
-            syntax="lucene"
+            f'author:"{redditor.name}"', time_filter="day", syntax="lucene"
         )
 
     def subreddit_name(self) -> str:
         return self.subreddit.display_name
 
-    def send_series_pm(
-        self,
-        post: praw.models.Submission,
-        msg: str
-    ) -> None:
+    def send_series_pm(self, post: praw.models.Submission, msg: str) -> None:
         if not self.read_only:
             try:
                 self.logger.info(
-                    "Sending Series PM",
-                    post_id=post.id,
-                    author=post.author
+                    "Sending Series PM", post_id=post.id, author=post.author
                 )
                 post.author.message(
-                    "Reminder about your series post on r/nosleep",
-                    msg,
-                    None
+                    "Reminder about your series post on r/nosleep", msg, None
                 )
             except Exception:
                 self.logger.exception(
-                    "Problem sending series message",
-                    author=post.author.name
+                    "Problem sending series message", author=post.author.name
                 )
         else:
             self.logger.info(
                 "Running in DEVELOPMENT MODE - not PMing series msg",
                 post_id=post.id,
-                author=post.author
+                author=post.author,
             )
 
     def post_series_reminder(
-        self,
-        post: praw.models.Submission,
-        comment: str
+        self, post: praw.models.Submission, comment: str
     ) -> None:
         self.logger.info("Adding series subscribeme comment ", post_id=post.id)
         self.add_comment(
-            post,
-            comment,
-            distinguish=True,
-            sticky=True,
-            lock=True
+            post, comment, distinguish=True, sticky=True, lock=True
         )
 
     def delete_post(self, post: praw.models.Submission) -> None:
@@ -164,7 +141,7 @@ class SubredditTool:
             self.logger.info(
                 "Running in DEVELOPMENT MODE - not deleting post",
                 post_id=post.id,
-                author=post.author.name
+                author=post.author.name,
             )
 
     def add_comment(
@@ -174,7 +151,7 @@ class SubredditTool:
         *,
         sticky: bool = False,
         distinguish: bool = False,
-        lock: bool = False
+        lock: bool = False,
     ) -> None:
         """Make a comment on the provided post."""
         if not self.read_only:
@@ -184,34 +161,31 @@ class SubredditTool:
                 author=post.author.name,
                 sticky=sticky,
                 distinguish=distinguish,
-                lock=lock
+                lock=lock,
             )
 
             try:
                 rsp = post.reply(msg)
+                dis = "yes" if distinguish else "no"
+                rsp.mod.distinguish(how=dis, sticky=sticky)
+                if lock:
+                    rsp.mod.lock()
+
             except Exception:
                 self.logger.exception(
                     "Exception occurred when adding comment to post",
                     post_id=post.id,
                     author=post.author.name,
                 )
-
-            dis = "yes" if distinguish else "no"
-            rsp.mod.distinguish(how=dis, sticky=sticky)
-            if lock:
-                rsp.mod.lock()
         else:
             self.logger.info(
                 "Running in DEVELOPMENT MODE - not adding comment",
                 post_id=post.id,
-                author=post.author.name
+                author=post.author.name,
             )
 
     def set_series_flair(
-        self,
-        post: praw.models.Submission,
-        *,
-        name: str = "flair-series"
+        self, post: praw.models.Submission, *, name: str = "flair-series"
     ) -> None:
         """Set the series flair for a post."""
         if not self.read_only:
@@ -232,7 +206,7 @@ class SubredditTool:
             self.logger.info(
                 "Running in DEVELOPMENT MODE - not flairing post",
                 post_id=post.id,
-                author=post.author
+                author=post.author,
             )
 
     def gen_compose_url(self, query: Mapping[str, str]) -> str:
@@ -241,9 +215,7 @@ class SubredditTool:
         return urllib.parse.urlunsplit(parts)
 
     def create_modmail_link(
-        self,
-        subject: str | None = None,
-        message: str | None = None
+        self, subject: str | None = None, message: str | None = None
     ) -> str:
         q = {
             "to": f"/r/{self.subreddit_name()}",
@@ -255,5 +227,3 @@ class SubredditTool:
         if message:
             q["message"] = message
         return self.gen_compose_url(q)
-
-
