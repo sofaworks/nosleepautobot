@@ -1,3 +1,13 @@
+# RETIREMENT NOTICE (2026 Jun 30)
+
+Due to Reddit's retirement of the Data API, this bot code has been archived and remains for legacy/reference purposes.
+
+u/nosleepautobot's underlying functionality has been ported to the new Devvit platform
+
+<img width="447" height="447" alt="image" src="https://github.com/user-attachments/assets/7e558f0f-958d-4ac6-a26c-8747e364786b" />
+
+
+------ 
 ## nosleepautobot
 
 ## Deploy Status
